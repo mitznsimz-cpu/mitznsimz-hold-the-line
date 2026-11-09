@@ -43,6 +43,11 @@
   let S = null, acc = 0, speed = 1, diceOn = true, paused = false, started = false, autoOn = false, lastAutoRound = -1;
   let selected = null, hover = null, lastTs = 0;
   const BOARD_PIXELS = 4.2e6;
+  // How many board pixels this browser draws smoothly, learned in battle and remembered. Some browsers slow down in a big
+  // window: when frames come slowly, the board is drawn a step softer (never below the screen's own 1x), and a smaller
+  // window that fits the budget keeps full sharpness.
+  const boardBudget = () => Math.min(BOARD_PIXELS, SET.boardPx > 0 ? SET.boardPx : BOARD_PIXELS);
+  const pace = { last: 0, gaps: [], stepAt: 0 };
   let coveredAt = 0, coveredFor = null; // when a menu last covered the board, and what was drawn under it
   const WON_KEY = 'mitzsimz.holdTheLine.won';
   function loadWon() { try { const v = JSON.parse(localStorage.getItem(WON_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
@@ -73,7 +78,7 @@
     const wrap = $('boardWrap');
     const W = Math.max(1, wrap.clientWidth), H = Math.max(1, wrap.clientHeight);
     // the board's pixels have a budget: past about four million, a big screen gains little sharpness and every frame pays
-    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2.5, Math.sqrt(BOARD_PIXELS / (W * H))));
+    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2.5, Math.sqrt(boardBudget() / (W * H))));
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     const M = currentMap(), MW = M.w, MH = M.h; // squares along a row, and rows
     const horiz = W > H * 1.15;
@@ -2669,6 +2674,25 @@
   });
 
   /* ---------- main loop ---------- */
+  // watch the gaps between frames in a battle; if most of 90 come slower than about 40 a second, draw the board a step softer
+  // A step that doesn't help (a browser holding frames to 30 a second to save battery, say) is undone, and the
+  // board is left alone for the rest of the visit.
+  function keepPace(ts) {
+    if (pace.off) return;
+    const gap = pace.last ? ts - pace.last : 0; pace.last = ts;
+    if (gap > 0 && gap < 250) pace.gaps.push(gap); // a long gap is the tab waking up, not the drawing
+    if (pace.gaps.length < 90) return;
+    const sorted = pace.gaps.sort((a, b) => a - b), median = sorted[sorted.length >> 1]; pace.gaps = [];
+    if (pace.tried) { // did the last step help?
+      const t = pace.tried; pace.tried = null;
+      if (median > t.median * 0.95) { pace.off = true; SET.boardPx = t.budget; saveSettings(); pace.last = 0; layout(); return; }
+    }
+    if (median <= 24 || L.dpr <= 1.01 || ts - pace.stepAt < 3000) return;
+    pace.tried = { median, budget: SET.boardPx };
+    SET.boardPx = Math.max(Math.round(L.W * L.H), Math.round(cv.width * cv.height * 0.64)); saveSettings(); // 0.8 of the sharpness
+    pace.stepAt = ts; pace.last = 0;
+    layout();
+  }
   function frame(ts) {
     const dt = Math.min(0.1, Math.max(0, (ts - lastTs) / 1000)); lastTs = ts;
     if (started && !paused) {
@@ -2682,6 +2706,7 @@
     const covered = !$('overlay').hidden, key = covered && S && L ? S : null;
     if (!covered) coveredFor = null;
     else if (coveredFor !== key || coveredFor === null) { coveredFor = key; coveredAt = ts; }
+    if (!covered && started && !paused && S.phase === 'running') keepPace(ts); else pace.last = 0;
     if (!covered || ts - coveredAt < 1500) {
       const now = clock();
       runImpacts(now);
