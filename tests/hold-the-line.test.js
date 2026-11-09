@@ -2036,6 +2036,24 @@ test('support and links follow the shared standard: the exact Ko-fi words, .co.u
   assert.ok(/won && !mode && !next \? '<p class="support-line">' \+ KOFI_LINE/.test(g), 'the end screen carries it only when a whole campaign is won');
 });
 
+test('quick on a big screen: no backdrop blur, the board rests under a menu, minis drawn when needed, a pixel budget that learns', () => {
+  const g = read('game.js'), page = read('index.html');
+  const build = g.slice(g.indexOf('function buildSprites()'), g.indexOf('function spr(type)'));
+  assert.ok(build && !/TableMinis\.sprite\(/.test(build), 'buildSprites no longer draws every mini up front');
+  assert.ok(/function spr\(type\) \{\s*return SPR\[type\] \|\|/.test(g) && /function sprW\(type\) \{ return SPRW\[type\] \|\|/.test(g), 'a mini is drawn the first time it is needed');
+  assert.ok(!/SPR\[st\.sp\.type\]|SPR\[selected\]|SPR\.__bear/.test(g), 'nothing reads a sprite without going through spr()');
+  assert.ok(/const BOARD_PIXELS = 4\.2e6;/.test(g) && /Math\.sqrt\(boardBudget\(\) \/ \(W \* H\)\)/.test(g), 'the board keeps to its pixel budget');
+  const kp = g.slice(g.indexOf('function keepPace(ts)'), g.indexOf('function frame(ts)'));
+  assert.ok(/median <= 24 \|\| L\.dpr <= 1\.01/.test(kp) && /cv\.width \* cv\.height \* 0\.64/.test(kp) && /saveSettings\(\)/.test(kp), 'slow frames in a battle soften the board a step, never below 1x, and it is remembered');
+  assert.ok(/median > t\.median \* 0\.95\) \{ pace\.off = true; SET\.boardPx = t\.budget/.test(kp), 'a step that does not help is undone');
+  assert.ok(/if \(!covered && started && !paused && S\.phase === 'running'\) keepPace\(ts\)/.test(g), 'only battle frames are timed');
+  assert.ok(!/backdrop-filter/.test(page), 'no backdrop-filter: blurring a full-window board every frame made every menu slow');
+  assert.ok(/if \(!covered \|\| ts - coveredAt < 1500\) \{\s*const now = clock\(\);\s*runImpacts\(now\);\s*draw\(now\);/.test(g), 'under a menu, the board settles for a moment and then stops redrawing');
+  assert.ok(/coveredFor = null; \/\/ redraw the board, even under a menu/.test(g), 'a resize redraws the board once, even under a menu');
+  // the battle never runs under a menu: Settings opens only from the tavern or the pause screen
+  assert.ok(!/showSettings\((?!\(\) => showTavern|showPause)/.test(g.replace(/function showSettings\(/, '')), 'Settings opens only from the tavern or the pause screen');
+});
+
 console.log('\n' + table.map(r => '       ' + r).join('\n'));
 for (const dk of ['easy', 'medium', 'hard', 'deadly']) if (tally[dk])
   console.log('       ' + dk.padEnd(7) + ' Simz ' + tally[dk].simz + '/' + tally[dk].n + '  slow ' + tally[dk].slow + '/' + tally[dk].n);

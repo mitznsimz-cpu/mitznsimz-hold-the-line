@@ -34,7 +34,7 @@
   const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
     barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
   const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-  const VERSION = '1.7.10'; // shown in the credits, so testers can say which version they were playing
+  const VERSION = '1.7.11'; // shown in the credits, so testers can say which version they were playing
   const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
   const cv = $('board'), ctx = cv.getContext('2d');
@@ -42,6 +42,13 @@
 
   let S = null, acc = 0, speed = 1, diceOn = true, paused = false, started = false, autoOn = false, lastAutoRound = -1;
   let selected = null, hover = null, lastTs = 0;
+  const BOARD_PIXELS = 4.2e6;
+  // How many board pixels this browser draws smoothly, learned in battle and remembered. Some browsers slow down in a big
+  // window: when frames come slowly, the board is drawn a step softer (never below the screen's own 1x), and a smaller
+  // window that fits the budget keeps full sharpness.
+  const boardBudget = () => Math.min(BOARD_PIXELS, SET.boardPx > 0 ? SET.boardPx : BOARD_PIXELS);
+  const pace = { last: 0, gaps: [], stepAt: 0 };
+  let coveredAt = 0, coveredFor = null; // when a menu last covered the board, and what was drawn under it
   const WON_KEY = 'mitzsimz.holdTheLine.won';
   function loadWon() { try { const v = JSON.parse(localStorage.getItem(WON_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
   let L = null, boardCache = null, V = null;
@@ -70,7 +77,8 @@
   function layout() {
     const wrap = $('boardWrap');
     const W = Math.max(1, wrap.clientWidth), H = Math.max(1, wrap.clientHeight);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    // the board's pixels have a budget: past about four million, a big screen gains little sharpness and every frame pays
+    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2.5, Math.sqrt(boardBudget() / (W * H))));
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     const M = currentMap(), MW = M.w, MH = M.h; // squares along a row, and rows
     const horiz = W > H * 1.15;
@@ -93,6 +101,7 @@
     buildBoard();
     buildSprites();
     PILLAR = renderPillar(L.cell * L.dpr);
+    coveredFor = null; // redraw the board, even under a menu
   }
   function gpos(lane, sq) {
     const c = L.cell;
@@ -463,16 +472,20 @@
   const tipOf = ch => (ch === 'H' && L.map.lawn ? MOLEHILL : ch === 'H' && L.map.skylights ? SKYLIGHT : ch === '^' && L.map.skylights ? RAFTER : TERRAIN[ch]);
 
   /* ---------- minis come from the shared library, through Hold the Line’s TableMinis adapter ---------- */
+  // Minis are drawn into sprites at the board's size when first needed, not all 80-odd at once: on a big screen the
+  // full set came to hundreds of megabytes of canvas, which a browser can be slow to juggle.
+  let SPRU = 0;
   function buildSprites() {
     TableMinis.clearCache(); SPRS.clear(); SPRP.clear(); SPRL.clear();
+    for (const k in SPR) delete SPR[k];
+    for (const k in SPRW) delete SPRW[k];
     for (const t of Object.keys(PACK.heroes)) if (facesLeft(t)) SPRL.add(t);
-    const u = L.cell * L.dpr;
-    for (const type of Object.keys(PACK.heroes).concat(Object.keys(PACK.monsters))) {
-      SPR[type] = TableMinis.sprite(figType(type), u, figOpts(type));
-      if (type === 'druid') { SPR.__bear = TableMinis.sprite('caveBear', u, { faction: 'hero' }); SPRW.__bear = TableMinis.flash(SPR.__bear); }
-      SPRW[type] = TableMinis.flash(SPR[type]);
-    }
+    SPRU = L.cell * L.dpr;
   }
+  function spr(type) {
+    return SPR[type] || (SPR[type] = type === '__bear' ? TableMinis.sprite('caveBear', SPRU, { faction: 'hero' }) : TableMinis.sprite(figType(type), SPRU, figOpts(type)));
+  }
+  function sprW(type) { return SPRW[type] || (SPRW[type] = TableMinis.flash(spr(type))); }
 
   // a sprite in the dark, baked once per shade step, so a shaded mini costs one draw like any other
   const SHADE_STEP = 0.12;
@@ -1205,7 +1218,7 @@
   }
   function drawSprite(st) {
     const bear = st.sp.form === 'bear', key = spriteKey(st.sp), pp = st.pose ? poseSprite(key, st.pose) : null, k = 1 / L.dpr, c = L.cell;
-    const s = pp ? pp.sp : bear ? SPR.__bear : SPR[st.sp.type];
+    const s = pp ? pp.sp : spr(bear ? '__bear' : st.sp.type);
     if (st.sp.inside) return; // swallowed by a gelatinous cube
     ctx.save();
     ctx.globalAlpha = st.alpha;
@@ -1218,7 +1231,7 @@
     const level = st.shade ? Math.round(st.shade / SHADE_STEP) : 0;
     ctx.drawImage(level > 0 ? shaded(pp ? key + '|' + st.pose : key, s, level) : s.cv, -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k);
     ctx.filter = 'none';
-    if (st.flash > 0) { ctx.globalAlpha = st.alpha * st.flash * 0.8; ctx.drawImage(pp ? pp.white : bear ? SPRW.__bear : SPRW[st.sp.type], -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); }
+    if (st.flash > 0) { ctx.globalAlpha = st.alpha * st.flash * 0.8; ctx.drawImage(pp ? pp.white : sprW(bear ? '__bear' : st.sp.type), -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); }
     ctx.restore();
   }
   function drawLevel(st) { // one gold chevron per level past the first, painted on the front of the base
@@ -1260,7 +1273,7 @@
   }
   function drawGhost() {
     if (!selected || !hover || !started || paused || HTL.canPlace(S, selected, hover.lane, hover.sq)) return;
-    const s = SPR[selected], k = 1 / L.dpr, p = gpos(hover.lane, hover.sq);
+    const s = spr(selected), k = 1 / L.dpr, p = gpos(hover.lane, hover.sq);
     ctx.globalAlpha = 0.5; ctx.save(); ctx.translate(p.x, p.y); if (L.horiz && SPRL.has(selected)) ctx.scale(-1, 1);
     ctx.drawImage(s.cv, -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); ctx.restore(); ctx.globalAlpha = 1;
   }
@@ -2661,6 +2674,25 @@
   });
 
   /* ---------- main loop ---------- */
+  // watch the gaps between frames in a battle; if most of 90 come slower than about 40 a second, draw the board a step softer
+  // A step that doesn't help (a browser holding frames to 30 a second to save battery, say) is undone, and the
+  // board is left alone for the rest of the visit.
+  function keepPace(ts) {
+    if (pace.off) return;
+    const gap = pace.last ? ts - pace.last : 0; pace.last = ts;
+    if (gap > 0 && gap < 250) pace.gaps.push(gap); // a long gap is the tab waking up, not the drawing
+    if (pace.gaps.length < 90) return;
+    const sorted = pace.gaps.sort((a, b) => a - b), median = sorted[sorted.length >> 1]; pace.gaps = [];
+    if (pace.tried) { // did the last step help?
+      const t = pace.tried; pace.tried = null;
+      if (median > t.median * 0.95) { pace.off = true; SET.boardPx = t.budget; saveSettings(); pace.last = 0; layout(); return; }
+    }
+    if (median <= 24 || L.dpr <= 1.01 || ts - pace.stepAt < 3000) return;
+    pace.tried = { median, budget: SET.boardPx };
+    SET.boardPx = Math.max(Math.round(L.W * L.H), Math.round(cv.width * cv.height * 0.64)); saveSettings(); // 0.8 of the sharpness
+    pace.stepAt = ts; pace.last = 0;
+    layout();
+  }
   function frame(ts) {
     const dt = Math.min(0.1, Math.max(0, (ts - lastTs) / 1000)); lastTs = ts;
     if (started && !paused) {
@@ -2669,15 +2701,23 @@
       if (autoOn && !S.free && S.purse == null && S.phase === 'running' && S.round !== lastAutoRound) { lastAutoRound = S.round; HTL.autoplay(S); }
     }
     if (S.events.length) { const evs = S.events.splice(0); for (const ev of evs) onEvent(ev); }
-    const now = clock();
-    runImpacts(now);
-    draw(now);
-    drawTrack(now);
-    hud();
-    drawCooldowns(now);
-    updateCard();
-    updateNext();
-    updatePowers(); updateBelt();
+    // Under a menu the board is still: let what's moving settle for a moment, then stop redrawing it until the menu
+    // closes, the battle changes or the window is resized. Redrawing a full-window board behind every menu made them slow.
+    const covered = !$('overlay').hidden, key = covered && S && L ? S : null;
+    if (!covered) coveredFor = null;
+    else if (coveredFor !== key || coveredFor === null) { coveredFor = key; coveredAt = ts; }
+    if (!covered && started && !paused && S.phase === 'running') keepPace(ts); else pace.last = 0;
+    if (!covered || ts - coveredAt < 1500) {
+      const now = clock();
+      runImpacts(now);
+      draw(now);
+      drawTrack(now);
+      hud();
+      drawCooldowns(now);
+      updateCard();
+      updateNext();
+      updatePowers(); updateBelt();
+    }
     requestAnimationFrame(frame);
   }
 
