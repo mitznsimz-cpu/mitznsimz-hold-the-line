@@ -34,7 +34,7 @@
   const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
     barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
   const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-  const VERSION = '1.7.14'; // shown in the credits, so testers can say which version they were playing
+  const VERSION = '1.7.15'; // shown in the credits, so testers can say which version they were playing
   const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
   const cv = $('board'), ctx = cv.getContext('2d');
@@ -420,6 +420,10 @@
       DARK_STOPS.forEach(([f, a]) => gr.addColorStop(f, 'rgba(8,6,14,' + a + ')'));
       g.fillStyle = gr; g.fillRect(m.x, m.y, m.w, m.h);
     }
+    // the board's rounded corners, baked in here: the page used to clip the live canvas to them every frame
+    g.save(); g.globalAlpha = 1; g.fillStyle = '#000'; g.globalCompositeOperation = 'destination-in'; g.beginPath(); // opaque, or it fades the board
+    if (g.roundRect) g.roundRect(0, 0, W, H, 8); else g.rect(0, 0, W, H);
+    g.fill(); g.restore();
   }
   const DARK_STOPS = [[0, 0], [0.16, 0.06], [0.45, 0.42], [1, 0.6]]; // shade by how far across the mat from the tavern
   function isDark() { return !!(SET.torch && S && HTL.battle(S).dark); }
@@ -1749,8 +1753,8 @@
       const h = PACK.heroes[type]; if (!h || !h.recharge) continue;
       const el = document.querySelector('#card-' + type + ' .cool'); if (!el) continue;
       const roundNow = S.round + clamp((now - (S.nextRoundAt - ROUND)) / ROUND, 0, 1);
-      const left = clamp(((S.ready[type] || 0) - roundNow) / h.recharge, 0, 1);
-      el.style.setProperty('--cool', left.toFixed(3));
+      const left = clamp(((S.ready[type] || 0) - roundNow) / h.recharge, 0, 1), v = left.toFixed(2);
+      if (el.dataset.cool !== v) { el.dataset.cool = v; el.style.setProperty('--cool', v); } // only when it has visibly moved
     }
   }
   const SEND_WHY = { closed: 'The rounds are up: no more can be sent.', once: 'Only one boss to a battle.', purse: 'Not enough in the purse yet.', over: 'The battle is over.' };
@@ -2035,11 +2039,15 @@
       const b = $('th-' + k); if (!b) continue;
       const n = S.belt[k], t = '× ' + n;
       if ($('thn-' + k).textContent !== t) $('thn-' + k).textContent = t;
-      b.disabled = !n || S.phase !== 'running' || S.thrownRound === S.round;
-      b.setAttribute('aria-pressed', throwing === k ? 'true' : 'false');
+      setIf(b, 'disabled', !n || S.phase !== 'running' || S.thrownRound === S.round);
+      setAttrIf(b, 'aria-pressed', throwing === k ? 'true' : 'false');
     }
   }
 
+  // the panels are refreshed every frame; touching the page only when something changed keeps the browser from
+  // restyling and repainting them sixty times a second
+  function setIf(el, prop, v) { if (el[prop] !== v) el[prop] = v; }
+  function setAttrIf(el, name, v) { if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
   /* ---------- the cats' powers in battle ---------- */
   let aiming = null;
   const POWER_WHY = { cooldown: 'Not ready yet.', target: 'Nothing there to pounce on.', boss: 'Not even Simz can shift the boss.', none: '', over: '' };
@@ -2077,9 +2085,9 @@
     if (box.hidden) return;
     for (const k in S.powers) {
       const b = $('pw-' + k), left = Math.max(0, S.powers[k].ready - S.round);
-      b.disabled = S.phase !== 'running' || left > 0;
-      b.setAttribute('aria-pressed', aiming === k ? 'true' : 'false');
-      b.classList.toggle('duty', HTL.POWERS[k].cat === S.duty);
+      setIf(b, 'disabled', S.phase !== 'running' || left > 0);
+      setAttrIf(b, 'aria-pressed', aiming === k ? 'true' : 'false');
+      if (b.classList.contains('duty') !== (HTL.POWERS[k].cat === S.duty)) b.classList.toggle('duty', HTL.POWERS[k].cat === S.duty);
       const cd = left ? 'in ' + left : 'ready';
       if ($('cd-' + k).textContent !== cd) $('cd-' + k).textContent = cd;
     }

@@ -29,9 +29,11 @@ html{height:100%;box-sizing:border-box}
 *,*::before,*::after{box-sizing:border-box}
 body{
   height:100%;margin:0;overflow:hidden;background-color:var(--table);color:var(--ink);font-family:var(--ui);font-size:15px;
-  background-image:repeating-linear-gradient(0deg, rgba(255,240,220,.018) 0 1px, transparent 1px 7px);
   -webkit-tap-highlight-color:transparent;
 }
+/* the table's faint grain on a layer of its own, painted once, so redrawing the board never repaints it */
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;will-change:transform;
+  background-image:repeating-linear-gradient(0deg, rgba(255,240,220,.018) 0 1px, transparent 1px 7px)}
 .app{height:100%;max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:8px;padding-inline:16px;padding-block:10px 12px}
 .top{display:flex;align-items:flex-end;justify-content:space-between;gap:10px 16px;flex-wrap:wrap}
 .brand{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -64,8 +66,8 @@ button:focus-visible{outline:2px solid var(--gold-hi);outline-offset:2px}
 .pip{width:9px;height:13px;border-radius:5px 5px 2px 2px;background:var(--red-hi);box-shadow:inset 0 0 0 1px #5a1016}
 .pip.lost{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line)}
 .track{flex:1 1 150px;min-width:140px;height:28px;display:block}
-.board{position:relative;flex:1 1 auto;min-height:0;border-radius:8px;overflow:hidden}
-#board{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:pointer}
+.board{position:relative;flex:1 1 auto;min-height:0} /* its rounded corners are baked into the board image, not clipped live */
+#board{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:pointer;will-change:transform} /* its own layer: redrawing it repaints nothing else */
 .tray{display:grid;grid-template-columns:repeat(var(--n,7),minmax(0,1fr));gap:6px}
 .card{
   position:relative;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;align-items:center;column-gap:6px;
@@ -83,7 +85,7 @@ button:focus-visible{outline:2px solid var(--gold-hi);outline-offset:2px}
 .card .key{position:absolute;top:4px;right:6px;font:600 10px/1 var(--ui);color:var(--ink-dim);opacity:.7}
 .card.kit{background:var(--table-2)}
 .card.kit .nm{font-size:13px}
-.card .cool{position:absolute;inset:0;border-radius:inherit;background:rgba(10,6,4,.62);transform-origin:bottom;transform:scaleY(var(--cool,0));pointer-events:none}
+.card .cool{position:absolute;inset:0;border-radius:inherit;background:rgba(10,6,4,.62);transform-origin:bottom;transform:scaleY(var(--cool,0));pointer-events:none;will-change:transform}
 @media (max-width:1060px){
   .card{grid-template-columns:1fr;grid-template-rows:auto auto auto;justify-items:center;text-align:center;padding:5px 2px 6px;row-gap:1px}
   .card canvas{grid-row:auto;width:38px;height:38px}

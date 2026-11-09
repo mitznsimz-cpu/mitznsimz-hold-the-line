@@ -2054,6 +2054,10 @@ test('quick on a big screen: no backdrop blur, the board rests under a menu, min
   assert.ok(draws.length >= 5 && draws.every(d => /^ctx\.drawImage\(img\(/.test(d)), 'every image drawn on the board goes through img(), the bitmap fast path: ' + draws.filter(d => !/img\(/.test(d)).join(' | '));
   assert.ok(/createImageBitmap\(cv\)\.then\(x => BM\.set\(cv, x\), \(\) => BM\.set\(cv, 2\)\)/.test(g), 'a bitmap that fails keeps the canvas');
   assert.ok(!/setLineDash|lineDashOffset\s*=/.test(g.replace(/\/\/[^\n]*/g, '')), "no canvas dashes: Safari's are very slow, so routes and rings are dashed by hand");
+  assert.ok(!/\.board\{[^}]*overflow:hidden/.test(page) && /#board\{[^}]*will-change:transform/.test(page), 'the board canvas is on a layer of its own, not clipped live by the page');
+  assert.ok(/g\.fillStyle = '#000'; g\.globalCompositeOperation = 'destination-in'/.test(g), 'the rounded corners are cut with an opaque fill, or the whole board image fades');
+  assert.ok(/body::before\{[^}]*position:fixed[^}]*will-change:transform/.test(page) && !/body\{[^}]*repeating-linear-gradient/.test(page), "the table's grain is painted once, on a layer of its own");
+  assert.ok(/if \(el\.dataset\.cool !== v\)/.test(g) && /setAttrIf\(b, 'aria-pressed'/.test(g), 'the panels touch the page only when something changed');
   assert.ok(/function strokeDashed\(pts, on, off, offset\)/.test(g) && /strokeDashed\(pts, dash\[0\], dash\[1\], -now \* c \* 0\.5\)/.test(g), 'the routes march as before, dashed by hand');
   assert.ok(/median > t\.median \* 0\.95\) \{ pace\.off = true; SET\.boardPx = t\.budget/.test(kp), 'a step that does not help is undone');
   assert.ok(/if \(!covered && started && !paused && S\.phase === 'running'\) keepPace\(ts\)/.test(g), 'only battle frames are timed');
