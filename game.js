@@ -34,7 +34,7 @@
   const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
     barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
   const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-  const VERSION = '1.7.15'; // shown in the credits, so testers can say which version they were playing
+  const VERSION = '1.7.16'; // shown in the credits, so testers can say which version they were playing
   const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
   const cv = $('board'), ctx = cv.getContext('2d');
@@ -42,12 +42,16 @@
 
   let S = null, acc = 0, speed = 1, diceOn = true, paused = false, started = false, autoOn = false, lastAutoRound = -1;
   let selected = null, hover = null, lastTs = 0;
-  const BOARD_PIXELS = 4.2e6;
+  // Safari, and every browser on an iPhone or iPad (they're all Safari underneath), draws a canvas much more slowly than
+  // Chrome or Firefox: on a Mac laptop a full-window board at 2x ran at 17 frames a second and at 1x at 58. So WebKit
+  // starts with a budget of about a million board pixels (1x to 1.14x on a laptop window, nearer 2x on a phone).
+  const WEBKIT = (() => { try { const ua = navigator.userAgent; return /AppleWebKit/.test(ua) && !/Chrome|Chromium|Edg|OPR|SamsungBrowser/.test(ua); } catch (e) { return false; } })();
+  const BOARD_PIXELS = WEBKIT ? 1.0e6 : 4.2e6;
   // How many board pixels this browser draws smoothly, learned in battle and remembered. Some browsers slow down in a big
-  // window: when frames come slowly, the board is drawn a step softer (never below the screen's own 1x), and a smaller
+  // window: when frames come slowly, the board is drawn softer (never below the screen's own 1x), and a smaller
   // window that fits the budget keeps full sharpness.
   const boardBudget = () => Math.min(BOARD_PIXELS, SET.boardPx > 0 ? SET.boardPx : BOARD_PIXELS);
-  const pace = { last: 0, gaps: [], stepAt: 0, from: 0 };
+  const pace = { last: 0, gaps: [], from: 0, counting: false };
   let coveredAt = 0, coveredFor = null; // when a menu last covered the board, and what was drawn under it
   const WON_KEY = 'mitzsimz.holdTheLine.won';
   function loadWon() { try { const v = JSON.parse(localStorage.getItem(WON_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
@@ -102,6 +106,7 @@
     buildSprites();
     PILLAR = renderPillar(L.cell * L.dpr);
     coveredFor = null; // redraw the board, even under a menu
+    pace.last = 0; pace.from = 0; pace.counting = false; // and judge its pace afresh
     warmSprites();
   }
   // this battle's heroes and monsters, drawn when the board is laid out rather than mid-fight; anything else (a summons,
@@ -2768,26 +2773,28 @@
       }
     };
   })();
-  // watch the gaps between frames in a battle; if most of 90 come slower than about 40 a second, draw the board a step softer
-  // A step that doesn't help (a browser holding frames to 30 a second to save battery, say) is undone, and the
-  // board is left alone for the rest of the visit.
+  // Watch the gaps between frames in a battle, a second at a time. If most come slower than about 40 a second, draw the
+  // board at about the pixels this browser can manage at 50, in one go. A browser holding frames to 30 a second to save
+  // battery isn't helped by that, so a step there is undone and the board left alone for the rest of the visit.
   function keepPace(ts) {
     if (pace.off) return;
     const gap = pace.last ? ts - pace.last : 0; pace.last = ts;
+    if (!pace.from) { pace.from = ts; pace.gaps = []; } // a fresh board: the first frames build its minis, so start counting after them
+    if (ts - pace.from < 600 && !pace.counting) return;
+    if (!pace.counting) { pace.counting = true; pace.from = ts; pace.gaps = []; return; }
     if (gap > 0 && gap < 5000) pace.gaps.push(gap); // a longer gap is the tab waking up, not the drawing
-    if (!pace.from) pace.from = ts;
-    if (pace.gaps.length < 3 || ts - pace.from < 2000) return; // judge every two seconds of battle (and at least 3 frames)
+    if (pace.gaps.length < 3 || ts - pace.from < 1000) return; // judge every second of battle (and at least 3 frames)
     pace.from = ts;
     const sorted = pace.gaps.sort((a, b) => a - b), median = sorted[sorted.length >> 1]; pace.gaps = [];
-    if (pace.tried) { // did the last step help?
+    const capped = m => m > 30 && m < 37; // a browser holding frames to 30 a second to save battery: steady 33 ms
+    if (pace.tried) { // did the last step help? Undo it only if frames were held to 30 a second before and after
       const t = pace.tried; pace.tried = null;
-      if (median > t.median * 0.95) { pace.off = true; SET.boardPx = t.budget; saveSettings(); pace.last = 0; layout(); return; }
+      if (capped(t.median) && capped(median)) { pace.off = true; SET.boardPx = t.budget; saveSettings(); layout(); return; }
     }
-    if (median <= 24 || L.dpr <= 1.01 || ts - pace.stepAt < 2000) return;
+    if (median <= 24 || L.dpr <= 1.01) return;
     pace.tried = { median, budget: SET.boardPx };
-    const f = median > 50 ? 0.4 : 0.64; // very slow (under 20 frames a second): a bigger step
+    const f = clamp(20 / median, 0.25, 0.8); // straight to about what this browser can draw at 50 frames a second
     SET.boardPx = Math.max(Math.round(L.W * L.H), Math.round(cv.width * cv.height * f)); saveSettings();
-    pace.stepAt = ts; pace.last = 0; pace.from = 0;
     layout();
   }
   function frame(ts) {

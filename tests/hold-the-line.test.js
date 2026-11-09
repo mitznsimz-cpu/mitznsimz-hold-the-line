@@ -2042,10 +2042,10 @@ test('quick on a big screen: no backdrop blur, the board rests under a menu, min
   assert.ok(build && !/TableMinis\.sprite\(/.test(build), 'buildSprites no longer draws every mini up front');
   assert.ok(/function spr\(type\) \{\s*return SPR\[type\] \|\|/.test(g) && /function sprW\(type\) \{ return SPRW\[type\] \|\|/.test(g), 'a mini is drawn the first time it is needed');
   assert.ok(!/SPR\[st\.sp\.type\]|SPR\[selected\]|SPR\.__bear/.test(g), 'nothing reads a sprite without going through spr()');
-  assert.ok(/const BOARD_PIXELS = 4\.2e6;/.test(g) && /Math\.sqrt\(boardBudget\(\) \/ \(W \* H\)\)/.test(g), 'the board keeps to its pixel budget');
+  assert.ok(/const BOARD_PIXELS = WEBKIT \? 1\.0e6 : 4\.2e6;/.test(g) && /Math\.sqrt\(boardBudget\(\) \/ \(W \* H\)\)/.test(g), 'the board keeps to its pixel budget: about a million pixels in Safari and on iPhones and iPads, 4.2 million elsewhere');
   const kp = g.slice(g.indexOf('function keepPace(ts)'), g.indexOf('function frame(ts)'));
-  assert.ok(/median <= 24 \|\| L\.dpr <= 1\.01/.test(kp) && /cv\.width \* cv\.height \* f\)/.test(kp) && /median > 50 \? 0\.4 : 0\.64/.test(kp) && /saveSettings\(\)/.test(kp), 'slow frames in a battle soften the board a step (a bigger one when very slow), never below 1x, and it is remembered');
-  assert.ok(/ts - pace\.from < 2000/.test(kp) && /gap < 5000/.test(kp), 'judged every two seconds of battle, so a very slow browser adapts quickly, even at 1 fps');
+  assert.ok(/median <= 24 \|\| L\.dpr <= 1\.01/.test(kp) && /cv\.width \* cv\.height \* f\)/.test(kp) && /const f = clamp\(20 \/ median, 0\.25, 0\.8\)/.test(kp) && /saveSettings\(\)/.test(kp), 'slow frames in a battle take the board straight to about what the browser can draw at 50 fps, never below 1x, and it is remembered');
+  assert.ok(/ts - pace\.from < 1000/.test(kp) && /gap < 5000/.test(kp) && /pace\.from = 0; pace\.counting = false;/.test(g), 'judged every second of battle, counted afresh after each layout, even at 1 fps');
   assert.ok(/const dt = Math\.min\(0\.25,/.test(g), 'a slow browser still plays at the right speed: up to a quarter of a second of game time a frame');
   assert.ok(/if \(st\.sp\.stone\) ctx\.filter = 'none';/.test(g) && !/^\s*ctx\.filter = 'none';/m.test(g), 'only a mini turned to stone touches the canvas filter');
   assert.ok(/function warmSprites\(\)/.test(g) && /warmSprites\(\);\n  \}/.test(g), "this battle's minis are drawn when the board is laid out, not mid-fight");
@@ -2059,7 +2059,7 @@ test('quick on a big screen: no backdrop blur, the board rests under a menu, min
   assert.ok(/body::before\{[^}]*position:fixed[^}]*will-change:transform/.test(page) && !/body\{[^}]*repeating-linear-gradient/.test(page), "the table's grain is painted once, on a layer of its own");
   assert.ok(/if \(el\.dataset\.cool !== v\)/.test(g) && /setAttrIf\(b, 'aria-pressed'/.test(g), 'the panels touch the page only when something changed');
   assert.ok(/function strokeDashed\(pts, on, off, offset\)/.test(g) && /strokeDashed\(pts, dash\[0\], dash\[1\], -now \* c \* 0\.5\)/.test(g), 'the routes march as before, dashed by hand');
-  assert.ok(/median > t\.median \* 0\.95\) \{ pace\.off = true; SET\.boardPx = t\.budget/.test(kp), 'a step that does not help is undone');
+  assert.ok(/if \(capped\(t\.median\) && capped\(median\)\) \{ pace\.off = true; SET\.boardPx = t\.budget/.test(kp), 'a step is undone only when a battery saver holds frames to 30 a second');
   assert.ok(/if \(!covered && started && !paused && S\.phase === 'running'\) keepPace\(ts\)/.test(g), 'only battle frames are timed');
   assert.ok(!/backdrop-filter/.test(page), 'no backdrop-filter: blurring a full-window board every frame made every menu slow');
   assert.ok(/if \(!covered \|\| ts - coveredAt < 1500\) \{\s*const now = clock\(\);\s*runImpacts\(now\);\s*draw\(now\);/.test(g), 'under a menu, the board settles for a moment and then stops redrawing');
