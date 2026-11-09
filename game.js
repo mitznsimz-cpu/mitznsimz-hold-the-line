@@ -34,7 +34,7 @@
   const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
     barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
   const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-  const VERSION = '1.7.8'; // shown in the credits, so testers can say which version they were playing
+  const VERSION = '1.7.9'; // shown in the credits, so testers can say which version they were playing
   const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
   const cv = $('board'), ctx = cv.getContext('2d');
@@ -2344,10 +2344,15 @@
   function showCredits(from) {
     const o = $('overlay');
     o.innerHTML = '<div class="panel credits" role="dialog" aria-labelledby="ovTitle"><span class="eyebrow">Mitz &amp; Simz present</span><h2 id="ovTitle">Credits</h2>' +
-      '<p>Hold the Line is a game by Pete for Mitz &amp; Simz. Ideas, bugs and kind words: <a href="mailto:mitznsimz@gmail.com">mitznsimz@gmail.com</a></p>' +
-      '<p class="legal">Version ' + VERSION + '. Say which version when you report a bug.</p>' +
+      '<p><strong>Mitz &amp; Simz: Hold the Line</strong>, version ' + VERSION + '. Made by Pete at ' +
+      '<a href="https://mitznsimz.co.uk" target="_blank" rel="noopener">MitzNSimz</a>, Folkestone.</p>' +
+      '<p>Found a bug, or had an idea? Tell us on <a href="https://github.com/mitznsimz-cpu/mitznsimz-hold-the-line/issues" target="_blank" rel="noopener">GitHub</a> ' +
+      'or at <a href="mailto:mitznsimz@gmail.com">mitznsimz@gmail.com</a>, and say which version you were playing.</p>' +
       '<p>The minis are drawn in code, unpainted, the way they come off the printer. Mitz and Simz supervised.</p>' +
-      '<p>Mitz &amp; Simz make 3D-printed miniatures and tools for Dungeon Masters: <a href="https://mitznsimz.co.uk" target="_blank" rel="noopener">mitznsimz.co.uk</a></p>' +
+      '<p>Mitz &amp; Simz make 3D-printed miniatures and tools for Dungeon Masters: <a href="https://mitznsimz.co.uk" target="_blank" rel="noopener">mitznsimz.co.uk</a>. ' +
+      'Also from Mitz &amp; Simz: <a href="https://mitznsimz-cpu.github.io/mitznsimz-dungeon-delve/" target="_blank" rel="noopener">Dungeon Delve</a>, a first-person dungeon crawler.</p>' +
+      '<p class="legal">The code is under the MIT licence, on <a href="https://github.com/mitznsimz-cpu/mitznsimz-hold-the-line" target="_blank" rel="noopener">GitHub</a>. ' +
+      'It doesn’t cover Mitz &amp; Simz, their characters, the miniature artwork or the icon, which are © MitzNSimz.</p>' +
       '<p class="legal">This work includes material taken from the System Reference Document 5.1 (“SRD 5.1”) by Wizards of the Coast LLC and available at ' +
       '<a href="https://dnd.wizards.com/resources/systems-reference-document" target="_blank" rel="noopener">https://dnd.wizards.com/resources/systems-reference-document</a>. ' +
       'The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at ' +
