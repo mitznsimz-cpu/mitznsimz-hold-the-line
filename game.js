@@ -34,7 +34,7 @@
   const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
     barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
   const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-  const VERSION = '1.7.11'; // shown in the credits, so testers can say which version they were playing
+  const VERSION = '1.7.12'; // shown in the credits, so testers can say which version they were playing
   const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
   const cv = $('board'), ctx = cv.getContext('2d');
@@ -47,7 +47,7 @@
   // window: when frames come slowly, the board is drawn a step softer (never below the screen's own 1x), and a smaller
   // window that fits the budget keeps full sharpness.
   const boardBudget = () => Math.min(BOARD_PIXELS, SET.boardPx > 0 ? SET.boardPx : BOARD_PIXELS);
-  const pace = { last: 0, gaps: [], stepAt: 0 };
+  const pace = { last: 0, gaps: [], stepAt: 0, from: 0 };
   let coveredAt = 0, coveredFor = null; // when a menu last covered the board, and what was drawn under it
   const WON_KEY = 'mitzsimz.holdTheLine.won';
   function loadWon() { try { const v = JSON.parse(localStorage.getItem(WON_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
@@ -102,6 +102,16 @@
     buildSprites();
     PILLAR = renderPillar(L.cell * L.dpr);
     coveredFor = null; // redraw the board, even under a menu
+    warmSprites();
+  }
+  // this battle's heroes and monsters, drawn when the board is laid out rather than mid-fight; anything else (a summons,
+  // a monster the Reverse player sends) is drawn the first time it's needed
+  function warmSprites() {
+    if (!S) return;
+    const types = new Set(HERO_ORDER);
+    const waves = JSON.stringify(HTL.battle(S).waves || []), re = /([A-Za-z]+):/g; let m;
+    while ((m = re.exec(waves))) if (PACK.monsters[m[1]]) types.add(m[1]);
+    for (const t of types) if (PACK.heroes[t] || PACK.monsters[t]) { spr(t); sprW(t); }
   }
   function gpos(lane, sq) {
     const c = L.cell;
@@ -1167,6 +1177,7 @@
     drawTavernHits(now);
     drawPlacement();
     drawBadSquares(now);
+    prof.mark('board');
 
     live.clear(); for (const u of S.units) if (u.alive) live.set(u.id, u);
     if (HTL.battle(S).crowds) stackSprites();
@@ -1179,7 +1190,9 @@
     list.sort((a, b) => a.gy - b.gy || a.gx - b.gx);
     if (L.dark) shadeAll(list);
     for (const st of list) if (!st.pillar) drawShadow(st);
+    prof.mark('shadows');
     for (const st of list) if (st.pillar) drawPillar(st, list); else { drawSprite(st); if (st.sp.level > 1 && !st.sp.dead) drawLevel(st); }
+    prof.mark('minis');
     drawGlows(list);
     drawTorches();
     for (const st of list) if (!st.pillar) drawHp(st);
@@ -1189,6 +1202,7 @@
     drawTags(now);
     drawPops(now);
     drawCoins(now);
+    prof.mark('effects');
   }
 
   const live = new Map(); // the sim's units by id, refreshed every frame
@@ -1227,10 +1241,10 @@
     ctx.translate(-st.pivot * c, 0);
     if (st.scale !== 1) ctx.scale(st.scale, st.scale);
     if (pp ? st.flip : turned(st.sp)) ctx.scale(-1, 1); // a sprite is centred on its ground point, so this mirrors it in place
-    if (st.sp.stone) ctx.filter = 'brightness(0.62) contrast(0.85)';
+    if (st.sp.stone) ctx.filter = 'brightness(0.62) contrast(0.85)'; // only a mini turned to stone touches the filter: some browsers slow down for any filter
     const level = st.shade ? Math.round(st.shade / SHADE_STEP) : 0;
     ctx.drawImage(level > 0 ? shaded(pp ? key + '|' + st.pose : key, s, level) : s.cv, -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k);
-    ctx.filter = 'none';
+    if (st.sp.stone) ctx.filter = 'none';
     if (st.flash > 0) { ctx.globalAlpha = st.alpha * st.flash * 0.8; ctx.drawImage(pp ? pp.white : sprW(bear ? '__bear' : st.sp.type), -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); }
     ctx.restore();
   }
@@ -2325,7 +2339,8 @@
     ['poses', 'Poses', 'Minis lunge, cast or raise a shield as they act, and flinch when they’re hit.'],
     ['bits', 'Hit effects', 'Sparks off armour, bone chips, stone dust, splats and embers.'],
     ['paws', 'Cats tidy up', 'Mitz and Simz take turns swatting fallen monsters off the table.'],
-    ['torch', 'Torchlight', 'Flickering torches, moving shadows, and dark crypts and caves.']
+    ['torch', 'Torchlight', 'Flickering torches, moving shadows, and dark crypts and caves.'],
+    ['perf', 'Frame timings', 'Frames a second and where the time goes, in the corner of the screen. Handy for a bug report.']
   ];
   const getSet = key => (key === 'reduced' ? calm() : !!SET[key]);
   function setSet(key, on) {
@@ -2674,33 +2689,61 @@
   });
 
   /* ---------- main loop ---------- */
+  // Frame timings (Settings): how many frames a second, and how long each part of a frame takes, averaged over half a
+  // second and shown in a corner, so a tester can say where a slow browser spends its time.
+  const prof = (() => {
+    const parts = ['sim', 'board', 'shadows', 'minis', 'effects', 'panels'], sum = {}, el = () => $('perf');
+    let t = 0, frames = 0, from = 0, lastFrame = 0, gaps = 0;
+    parts.forEach(p => { sum[p] = 0; });
+    return {
+      start(ts) {
+        if (!SET.perf) { if (el()) el().remove(); return; }
+        if (lastFrame) gaps += ts - lastFrame; lastFrame = ts; frames++; t = performance.now();
+        if (!from) from = ts;
+        if (ts - from >= 500) {
+          let box = el();
+          if (!box) { box = document.createElement('div'); box.id = 'perf'; box.setAttribute('aria-hidden', 'true'); document.body.appendChild(box); }
+          const n = Math.max(1, frames - 1), ms = p => (sum[p] / frames).toFixed(1);
+          box.textContent = Math.round(1000 * n / Math.max(1, gaps)) + ' fps · ' + (gaps / n).toFixed(0) + ' ms a frame · board ' + cv.width + '×' + cv.height + ' (' + (L ? L.dpr.toFixed(2) : '?') + '×)\n' +
+            parts.map(p => p + ' ' + ms(p)).join(' · ') + ' ms';
+          parts.forEach(p => { sum[p] = 0; }); frames = 0; gaps = 0; from = ts;
+        }
+      },
+      mark(part) { if (!SET.perf) return; const now = performance.now(); sum[part] += now - t; t = now; }
+    };
+  })();
   // watch the gaps between frames in a battle; if most of 90 come slower than about 40 a second, draw the board a step softer
   // A step that doesn't help (a browser holding frames to 30 a second to save battery, say) is undone, and the
   // board is left alone for the rest of the visit.
   function keepPace(ts) {
     if (pace.off) return;
     const gap = pace.last ? ts - pace.last : 0; pace.last = ts;
-    if (gap > 0 && gap < 250) pace.gaps.push(gap); // a long gap is the tab waking up, not the drawing
-    if (pace.gaps.length < 90) return;
+    if (gap > 0 && gap < 1000) pace.gaps.push(gap); // a longer gap is the tab waking up, not the drawing
+    if (!pace.from) pace.from = ts;
+    if (pace.gaps.length < 12 || ts - pace.from < 2000) return; // judge every two seconds of battle
+    pace.from = ts;
     const sorted = pace.gaps.sort((a, b) => a - b), median = sorted[sorted.length >> 1]; pace.gaps = [];
     if (pace.tried) { // did the last step help?
       const t = pace.tried; pace.tried = null;
       if (median > t.median * 0.95) { pace.off = true; SET.boardPx = t.budget; saveSettings(); pace.last = 0; layout(); return; }
     }
-    if (median <= 24 || L.dpr <= 1.01 || ts - pace.stepAt < 3000) return;
+    if (median <= 24 || L.dpr <= 1.01 || ts - pace.stepAt < 2000) return;
     pace.tried = { median, budget: SET.boardPx };
-    SET.boardPx = Math.max(Math.round(L.W * L.H), Math.round(cv.width * cv.height * 0.64)); saveSettings(); // 0.8 of the sharpness
-    pace.stepAt = ts; pace.last = 0;
+    const f = median > 50 ? 0.4 : 0.64; // very slow (under 20 frames a second): a bigger step
+    SET.boardPx = Math.max(Math.round(L.W * L.H), Math.round(cv.width * cv.height * f)); saveSettings();
+    pace.stepAt = ts; pace.last = 0; pace.from = 0;
     layout();
   }
   function frame(ts) {
-    const dt = Math.min(0.1, Math.max(0, (ts - lastTs) / 1000)); lastTs = ts;
+    const dt = Math.min(0.25, Math.max(0, (ts - lastTs) / 1000)); lastTs = ts; // up to 5 ticks a frame, so a slow browser plays at the right speed, if choppily
+    prof.start(ts);
     if (started && !paused) {
       acc += dt * speed;
       while (acc >= TICK) { HTL.step(S, TICK); acc -= TICK; }
       if (autoOn && !S.free && S.purse == null && S.phase === 'running' && S.round !== lastAutoRound) { lastAutoRound = S.round; HTL.autoplay(S); }
     }
     if (S.events.length) { const evs = S.events.splice(0); for (const ev of evs) onEvent(ev); }
+    prof.mark('sim');
     // Under a menu the board is still: let what's moving settle for a moment, then stop redrawing it until the menu
     // closes, the battle changes or the window is resized. Redrawing a full-window board behind every menu made them slow.
     const covered = !$('overlay').hidden, key = covered && S && L ? S : null;
@@ -2717,6 +2760,7 @@
       updateCard();
       updateNext();
       updatePowers(); updateBelt();
+      prof.mark('panels');
     }
     requestAnimationFrame(frame);
   }
