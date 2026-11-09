@@ -1,0 +1,1025 @@
+/* Hold the Line: the core content pack, "Under the Cat & Mouse".
+   Heroes and their level 3 paths, difficulty, monsters, maps and battles: plain data, read by the rules engine in sim.js.
+   A new pack is a file like this one that adds itself to HTL_PACKS. */
+var HTL_PACKS = HTL_PACKS || {};
+HTL_PACKS.core = (function () {
+  'use strict';
+  /* Heroes. targeting: adjacent (front or back in its lane), lane (nearest monster ahead), lanes (the same, then the
+     lanes either side), around (any of the
+     eight squares round it), charge (rushes the first monster ahead, once). recharge: rounds before another can be placed. */
+  const HEROES = {
+    bard:      { name: 'Bard', role: 'Earns gold', cost: 50, up: [40, 60], hp: 12, ac: 13, init: 3,
+                 income: { every: 3, gold: 20 },
+                 info: 'Plays for coin: 20 gold every third turn. Keep Bards at the back.' },
+    fighter:   { name: 'Fighter', role: 'Holds the line', cost: 50, up: [40, 60], hp: 30, ac: 18, init: 0, targeting: 'adjacent',
+                 attack: { name: 'Longsword', bonus: 5, n: 1, d: 8, mod: 3, kind: 'melee', fx: 'slash' },
+                 info: 'Heavy armour and a longsword. Blocks its lane and hits a monster next to it, in front or behind.' },
+    ranger:    { name: 'Ranger', role: 'Shoots down the lane', cost: 100, up: [75, 100], hp: 14, ac: 14, init: 3, targeting: 'lane',
+                 attack: { name: 'Longbow', bonus: 6, n: 1, d: 8, mod: 3, kind: 'ranged', fx: 'arrow' },
+                 info: 'Shoots the nearest monster ahead in its lane, at any range.' },
+    wizard:    { name: 'Wizard', role: 'Fireball every third turn', cost: 150, up: [100, 150], hp: 12, ac: 12, init: 2, targeting: 'lanes',
+                 attack: { name: 'Fire Bolt', bonus: 5, n: 1, d: 10, mod: 0, kind: 'ranged', fx: 'bolt', magic: true, fire: true },
+                 spell: { name: 'Fireball', every: 3, n: 3, d: 6, dc: 13, radius: 1 },
+                 info: 'Fire Bolt every turn and a Fireball every third turn, down its lane or the next lane over when its own is clear. Spells hit resistant monsters at full strength.' },
+    cleric:    { name: 'Cleric', role: 'Heals heroes nearby', cost: 75, up: [60, 90], hp: 18, ac: 16, init: 1, targeting: 'lane',
+                 heal: { n: 1, d: 8, mod: 3, reach: 2 }, light: 2,
+                 attack: { name: 'Sacred Flame', bonus: 5, n: 1, d: 8, mod: 0, kind: 'ranged', fx: 'radiant', magic: true, holy: true },
+                 info: 'Healing Word: heals the most hurt hero within two squares, and cures paralysis. With nobody to heal, calls down Sacred Flame, which burns undead twice as hard.' },
+    rogue:     { name: 'Rogue', role: 'Stabs sideways too', cost: 75, up: [60, 90], hp: 18, ac: 15, init: 4, targeting: 'around',
+                 attack: { name: 'Shortsword', bonus: 6, n: 1, d: 6, mod: 4, kind: 'melee', fx: 'slash' },
+                 sneak: { n: 2, d: 6 },
+                 info: 'Stabs a monster in any of the eight squares around it, including the lanes either side. Sneak Attack adds 2d6 when another hero is next to the target.' },
+    barbarian: { name: 'Barbarian', role: 'One raging charge', cost: 100, up: [60, 80], recharge: 8, hp: 30, ac: 14, init: 2, targeting: 'charge',
+                 attack: { name: 'Raging greataxe', bonus: 6, n: 2, d: 12, mod: 5, kind: 'melee', fx: 'smash', reckless: true },
+                 info: 'Rages as soon as a monster is ahead in its lane: charges it, swings at everything around it with advantage, then is spent. The next Barbarian is ready 8 rounds later.' },
+    paladin:   { name: 'Paladin', role: 'Shields its neighbours', cost: 100, up: [75, 100], hp: 26, ac: 18, init: 0, targeting: 'adjacent',
+                 attack: { name: 'Longsword', bonus: 5, n: 1, d: 8, mod: 3, kind: 'melee', fx: 'slash' },
+                 aura: { ac: 1, reach: 1 }, smite: { every: 3, n: 2, d: 8 }, light: 2,
+                 info: 'Holds a row like a Fighter. Heroes next to it get +1 AC, and every third hit is a Divine Smite: 2d8 radiant on top, doubled against undead. Its light shows up invisible things nearby.' },
+    druid:     { name: 'Druid', role: 'Slows a crowd', cost: 125, up: [90, 125], hp: 16, ac: 13, init: 2, targeting: 'lanes',
+                 attack: { name: 'Produce Flame', bonus: 5, n: 1, d: 8, mod: 0, kind: 'ranged', fx: 'bolt', magic: true, fire: true },
+                 entangle: { every: 3, dc: 13, turns: 2 }, wildShape: { hp: 30, figure: 'caveBear', attack: { name: 'Bear claws', bonus: 5, n: 2, d: 6, mod: 4, kind: 'melee', fx: 'slash' } },
+                 info: 'Produce Flame down its row or the next. Every third turn Entangle slows everything in a 3 × 3 square. Once a battle, when a monster reaches it, it becomes a bear until the bear is beaten.' },
+    monk:      { name: 'Monk', role: 'Stuns and catches arrows', cost: 75, up: [60, 90], hp: 20, ac: 16, init: 5, targeting: 'adjacent',
+                 attack: { name: 'Unarmed strike', bonus: 6, n: 1, d: 6, mod: 4, kind: 'melee', fx: 'smash' }, flurry: 2,
+                 stun: { every: 2, dc: 13 }, deflect: { n: 1, d: 10, mod: 4 },
+                 info: 'Punches twice a turn. Every other turn its first hit is a Stunning Strike that can stop a monster for a turn, and it knocks arrows and bolts out of the air.' },
+    warlock:   { name: 'Warlock', role: 'Blasts monsters back', cost: 100, up: [75, 100], hp: 14, ac: 13, init: 2, targeting: 'lane',
+                 attack: { name: 'Eldritch Blast', bonus: 6, n: 1, d: 10, mod: 0, kind: 'ranged', fx: 'shadow', magic: true, push: true },
+                 info: 'Eldritch Blast down its row, at any range. Every hit knocks the monster back a square.' },
+    sorcerer:  { name: 'Sorcerer', role: 'Lightning that jumps rows', cost: 150, up: [100, 150], hp: 12, ac: 12, init: 2, targeting: 'lane',
+                 attack: { name: 'Chain lightning', bonus: 6, n: 2, d: 6, mod: 0, kind: 'ranged', fx: 'bolt', magic: true }, chain: { jumps: 2, reach: 2 },
+                 info: 'Lightning down its row that jumps to the nearest monster in a row either side, twice.' },
+    tinker:    { name: 'Tinker', role: 'Builds a ballista and traps', cost: 125, up: [90, 125], hp: 14, ac: 14, init: 1, targeting: 'lane',
+                 attack: { name: 'Hand crossbow', bonus: 5, n: 1, d: 6, mod: 2, kind: 'ranged', fx: 'arrow' }, builds: { ballista: 6, trap: 4 },
+                 info: 'Sets up a ballista on the square in front and rebuilds it if it is wrecked. Every fourth turn it lays a spring trap ahead in its row.' },
+
+    // cheap defenders: no turns of their own. Objects hold a square; traps lie on one until something walks in.
+    barricade: { name: 'Barricade', role: 'Blocks a square', cost: 25, defender: true, inert: true, hp: 40, ac: 12, init: 0,
+                 info: 'Tables, barrels and a door off its hinges. Holds a square until something smashes through.' },
+    font:      { name: 'Holy water font', role: 'Blesses the squares round it', cost: 40, defender: true, inert: true, hp: 20, ac: 13, init: 0, holy: 1, light: 1,
+                 info: 'The squares round it count as holy ground: undead that start a turn there take 2 radiant damage.' },
+    caltrops:  { name: 'Caltrops', role: 'Slows walkers', cost: 15, defender: true, trap: { uses: 3, n: 1, d: 4, slow: 2 },
+                 info: 'Spikes on the floor. The next three walkers through take 1d4 and are slowed for two turns. Flyers do not care.' },
+    oil:       { name: 'Oil flask', role: 'Burns once', cost: 20, defender: true, trap: { uses: 1, n: 3, d: 6, dc: 13, radius: 1, fire: true },
+                 info: 'Breaks under the first walker through: 3d6 fire to everything round it, half on a save. Stops trolls healing.' },
+
+    // allies: called up by a hero's path, never bought. They fight for you and hold a square.
+    hound:     { name: 'Hound', role: 'Houndmaster’s companion', ally: true, figure: 'warrenHound', cost: 0, hp: 16, ac: 13, init: 4, targeting: 'adjacent',
+                 attack: { name: 'Bite', bonus: 4, n: 1, d: 6, mod: 2, kind: 'melee', fx: 'slash' },
+                 info: 'A Houndmaster’s hound. Holds the square in front of its Ranger and bites whatever comes close. A new one comes when it falls.' },
+    risen:     { name: 'Risen skeleton', role: 'Raised for the wave', ally: true, figure: 'skeleton', cost: 0, hp: 13, ac: 13, init: 1, targeting: 'adjacent',
+                 attack: { name: 'Rusty sword', bonus: 4, n: 1, d: 6, mod: 2, kind: 'melee', fx: 'slash' },
+                 info: 'A fallen monster raised by a Graveseer. Fights for you until the wave is over, then falls back to bones.' },
+    ballista:  { name: 'Ballista', role: 'The Tinker’s siege bow', ally: true, cost: 0, hp: 20, ac: 15, init: 0, targeting: 'lane',
+                 attack: { name: 'Ballista bolt', bonus: 6, n: 2, d: 8, mod: 0, kind: 'ranged', fx: 'arrow' },
+                 info: 'A Tinker’s ballista. Shoots big bolts down its row and never moves.' }
+  };
+
+  /* Level 3 paths: the free 5e rules' own subclass first, then an original Mitz & Simz one. Each has one signature rule. */
+  const PATHS = {
+    bard:      { lore:         { name: 'College of Lore', rule: 'Cutting Words: monsters within two squares get −2 to hit.' },
+                 coinsinger:   { name: 'Coinsinger', rule: 'Plays for half as much gold again.' } },
+    fighter:   { champion:     { name: 'Champion', rule: 'Scores a critical hit on a 19 or a 20.' },
+                 shieldwarden: { name: 'Shieldwarden', rule: 'Every hit shoves the monster back a square, if there is room.' } },
+    ranger:    { hunter:       { name: 'Hunter', rule: 'Volley: every shot is followed by one at the next monster behind it.' },
+                 houndmaster:  { name: 'Houndmaster', rule: 'A hound holds the square in front, and a new one comes when it falls.' } },
+    wizard:    { evoker:       { name: 'School of Evocation', rule: 'A Fireball every second turn instead of every third.' },
+                 graveseer:    { name: 'Graveseer', rule: 'Monsters slain within two squares rise as your skeletons for the rest of the wave.' } },
+    cleric:    { life:         { name: 'Life Domain', rule: 'Heals the two most hurt heroes each turn.' },
+                 dawnkeeper:   { name: 'Dawnkeeper', rule: 'Sacred Flame burns a 3 × 3 square, and undead it hurts may flee.' } },
+    rogue:     { thief:        { name: 'Thief', rule: 'Every hit pockets 2 gold.' },
+                 cutthroat:    { name: 'Cutthroat', rule: 'The first hit on an unhurt monster is a critical.' } },
+    barbarian: { berserker:    { name: 'Path of the Berserker', rule: 'Rages twice before it is spent.' },
+                 stonehide:    { name: 'Stonehide', rule: 'Survives its charge, gains +2 AC and stays on the mat as a blocker.' } },
+    paladin:   { devotion:     { name: 'Oath of Devotion', rule: 'Divine Smite on every second hit instead of every third.' },
+                 lanternbearer:{ name: 'Lanternbearer', rule: 'Its aura and its light reach two squares further.' } },
+    druid:     { land:         { name: 'Circle of the Land', rule: 'Entangle every second turn instead of every third.' },
+                 thornwarden:  { name: 'Thornwarden', rule: 'Entangled monsters also take 1d6 piercing from the thorns.' } },
+    monk:      { openhand:     { name: 'Way of the Open Hand', rule: 'A Stunning Strike every turn, not every other.' },
+                 windstep:     { name: 'Windstep', rule: 'Three blows a turn instead of two.' } },
+    warlock:   { fiend:        { name: 'The Fiend', rule: 'Eldritch Blast deals an extra 1d10.' },
+                 hexbinder:    { name: 'Hexbinder', rule: 'Every hit also slows the monster for a turn.' } },
+    sorcerer:  { draconic:     { name: 'Draconic Bloodline', rule: 'The lightning jumps three times instead of two.' },
+                 stormcaller:  { name: 'Stormcaller', rule: 'Every strike of the lightning deals an extra 1d6.' } },
+    tinker:    { siegewright:  { name: 'Siegewright', rule: 'Its ballista hits for 3d8 and has twice the hit points.' },
+                 trapwright:   { name: 'Trapwright', rule: 'Lays a spring trap every second turn instead of every fourth.' } }
+  };
+
+  /* Difficulty, in 5e's own encounter words. Medium is the game as balanced; the others scale monster hit points and the purse. */
+  const DIFFICULTY = {
+    easy:   { name: 'Easy', hp: 0.75, gold: 1.25, lives: 5, line: 'Monsters have a quarter less health, and the purse is fuller.' },
+    medium: { name: 'Medium', hp: 1, gold: 1, lives: 5, line: 'The battles as they were made.' },
+    hard:   { name: 'Hard', hp: 1.4, gold: 0.85, lives: 5, line: 'Monsters are tougher by two fifths, and the purse is lighter.' },
+    deadly: { name: 'Deadly', hp: 1.6, gold: 0.8, lives: 3, line: 'Tougher by three fifths, a light purse, and only three lives.' }
+  };
+
+  /* Monsters. A type name is also the name of its mini in MitzMinis.
+     Attack: to-hit bonus, n d-sided dice + mod; kind melee or ranged; range in squares (default 1);
+     extra: [n, d] more dice on a hit, such as poison.
+     Traits: flying (leaps over the first hero in its way), multi (attacks a turn), regen (hit points a turn),
+     resist (half damage from weapons; the Wizard's spells hit fully), drain (heals by half the damage it deals),
+     paralyse (a hit can freeze a hero for a turn), split (divides in two when first badly hurt),
+     summon { type, every, max }, mend { every, n, d } (heals a wounded monster nearby), boss,
+     undead (the Cleric's Sacred Flame does double damage). */
+  const A = (name, bonus, n, d, mod, o) => Object.assign({ name, bonus, n, d, mod, kind: 'melee', fx: 'slash', range: 1 }, o || {});
+  const M = (name, level, hp, ac, init, dexSave, speed, bounty, attack, traits) =>
+    ({ name, level, hp, ac, init, dexSave, speed, bounty, attack, traits: traits || {} });
+  const BOW = range => ({ kind: 'ranged', fx: 'arrow', range });
+  const HEX = (fx, range) => ({ kind: 'ranged', fx, range });
+  const SMASH = { fx: 'smash' };
+  const UNDEAD = { undead: true };
+
+  // Headline monsters carry extra hit points so they last long enough to show what they do against a full board.
+  const MONSTERS = {
+    // the goblin warren
+    direRat:       M('Dire Rat', 1, 5, 12, 2, 2, 1.25, 3, A('Bite', 4, 1, 4, 2)),
+    kobold:        M('Kobold', 1, 5, 12, 2, 2, 1, 4, A('Rusty spear', 4, 1, 4, 2)),
+    goblin:        M('Goblin', 1, 7, 15, 2, 2, 1, 5, A('Scimitar', 4, 1, 6, 2)),
+    caveBat:       M('Cave Bat', 1, 8, 13, 3, 3, 1.5, 6, A('Wing', 4, 1, 4, 2), { flying: true }),
+    goblinArcher:  M('Goblin Archer', 1, 7, 13, 2, 2, 1, 6, A('Short bow', 4, 1, 6, 2, BOW(4))),
+    goblinShaman:  M('Goblin Shaman', 2, 10, 12, 2, 1, 0.75, 10, A('Hex', 4, 2, 4, 0, HEX('shadow', 3))),
+    goblinChief:   M('Goblin Chief', 3, 80, 17, 1, 1, 0.75, 40, A('Iron axe', 5, 1, 8, 3), { multi: 2, boss: true }),
+    // the deep caves
+    deepLeech:     M('Deep Leech', 2, 8, 10, 1, 1, 0.75, 4, A('Latch', 4, 1, 4, 2), { drain: true }),
+    warrenHound:   M('Warren Hound', 2, 16, 13, 3, 3, 1.5, 8, A('Savage bite', 5, 1, 8, 2)),
+    caveSerpent:   M('Cave Serpent', 2, 18, 13, 2, 2, 0.75, 9, A('Bite', 5, 1, 6, 2, { extra: [1, 6] })),
+    tombSpider:    M('Tomb Spider', 3, 26, 14, 3, 3, 1, 14, A('Venom fang', 5, 1, 8, 3, { extra: [1, 6] })),
+    direWolf:      M('Dire Wolf', 3, 30, 14, 2, 2, 1.5, 15, A('Savage bite', 5, 2, 6, 3)),
+    giantBeetle:   M('Carrion Beetle', 3, 30, 16, 0, 0, 0.75, 15, A('Mandibles', 4, 2, 4, 2), { resist: true }),
+    caveBear:      M('Cave Bear', 4, 85, 13, 1, 0, 0.75, 35, A('Maul', 6, 2, 6, 4, SMASH), { multi: 2 }),
+    // the old crypt
+    rotGrub:       M('Rot Grub', 2, 6, 10, 0, 0, 0.5, 3, A('Burrow', 3, 1, 4, 0, { extra: [1, 4] })),
+    skeleton:      M('Skeleton', 2, 13, 13, 2, 2, 0.75, 7, A('Rusted blade', 4, 1, 6, 2), UNDEAD),
+    skelArcher:    M('Skeleton Archer', 2, 13, 13, 2, 2, 0.75, 8, A('Warped bow', 4, 1, 6, 2, BOW(4)), UNDEAD),
+    ghoul:         M('Ghoul', 3, 22, 12, 2, 2, 1, 12, A('Raking claws', 4, 2, 4, 2), { paralyse: true, undead: true }),
+    shadeWisp:     M('Shade Wisp', 3, 12, 14, 3, 3, 1, 10, A('Chill', 5, 1, 8, 2, HEX('shadow', 3)), UNDEAD),
+    boneKnight:    M('Bone Knight', 4, 40, 17, 0, 0, 0.5, 25, A('Greatsword', 6, 2, 6, 3), { resist: true, undead: true }),
+    cryptWarden:   M('Crypt Warden', 4, 45, 16, 0, 0, 0.5, 25, A('Halberd', 6, 1, 10, 3, { range: 2 }), UNDEAD),
+    shade:         M('The Shade of Grelminar', 5, 160, 15, 2, 2, 0.4, 100, A('Withering touch', 6, 2, 8, 3, HEX('shadow', 3)),
+                     { regen: 4, summon: { type: 'shadeWisp', every: 3, max: 4 }, boss: true, undead: true }),
+    // the warband road
+    brigand:       M('Brigand', 3, 16, 14, 2, 2, 1, 10, A('Shortsword', 4, 1, 6, 2)),
+    brigandArcher: M('Brigand Archer', 3, 14, 13, 2, 2, 1, 10, A('Shortbow', 4, 1, 8, 2, BOW(4))),
+    orcRaider:     M('Orc Raider', 2, 13, 13, 1, 1, 1, 8, A('Cleaver', 5, 1, 8, 3)),
+    orc:           M('Orc', 2, 15, 13, 1, 1, 0.75, 10, A('Greataxe', 5, 1, 12, 3)),
+    lizardfolk:    M('Lizardfolk', 3, 22, 15, 0, 0, 0.75, 12, A('Barbed spear', 4, 1, 8, 2, { range: 2 })),
+    renegadeMage:  M('Renegade Mage', 4, 22, 12, 2, 2, 0.75, 20, A('Arc bolt', 6, 2, 6, 2, HEX('bolt', 4))),
+    fallenPriest:  M('Fallen Priest', 4, 30, 14, 1, 0, 0.5, 20, A('Smite', 5, 1, 10, 2, HEX('shadow', 3)),
+                     { mend: { every: 2, n: 2, d: 6 } }),
+    ogre:          M('Ogre', 4, 85, 11, -1, -1, 0.5, 30, A('Greatclub', 6, 2, 8, 4, SMASH)),
+    orcChampion:   M('Orc Champion', 4, 95, 16, 1, 1, 0.75, 40, A('Greataxe', 7, 1, 12, 4), { multi: 2 }),
+    // the barrow
+    wight:         M('Wight', 5, 45, 14, 1, 1, 0.75, 30, A('Withering touch', 6, 1, 10, 3), { drain: true, undead: true }),
+    wraith:        M('Wraith', 6, 55, 13, 3, 3, 1, 40, A('Chill grasp', 6, 2, 8, 3), { flying: true, drain: true, resist: true, undead: true }),
+    boneTitan:     M('Bone Titan', 7, 110, 15, -1, -1, 0.5, 55, A('Sweeping femur', 7, 3, 6, 4, SMASH), { resist: true, undead: true }),
+    barrowLich:    M('Barrow Lich', 7, 200, 16, 2, 2, 0.4, 150, A('Deathbolt', 7, 3, 8, 0, HEX('shadow', 4)),
+                     { regen: 4, summon: { type: 'skeleton', every: 3, max: 5 }, boss: true, undead: true }),
+    // the deep halls
+    emberWisp:     M('Ember Wisp', 3, 14, 14, 3, 3, 1, 12, A('Searing touch', 5, 1, 8, 2, HEX('bolt', 2)),
+                     { summon: { type: 'emberWisp', every: 3, max: 1 } }),
+    gloom:         M('Gloom', 4, 40, 8, -1, -1, 0.5, 20, A('Engulf', 5, 2, 6, 1), { split: true }),
+    gargoyle:      M('Gargoyle', 5, 40, 15, 1, 2, 1, 30, A('Stone claws', 5, 2, 6, 2), { flying: true, resist: true }),
+    ironSentinel:  M('Iron Sentinel', 4, 55, 17, 0, -1, 0.5, 35, A('Piston fist', 6, 2, 6, 3, SMASH), { resist: true, regen: 3 }),
+    clayGolem:     M('Clay Golem', 6, 120, 14, -1, -1, 0.4, 60, A('Slam', 7, 2, 10, 4, SMASH), { resist: true }),
+    deepHorror:    M('Deep Horror', 8, 150, 15, 1, 1, 0.5, 100, A('Grasping dark', 7, 3, 8, 4, HEX('shadow', 2)), { regen: 5, split: true }),
+    ankheg:        M('Ankheg', 4, 45, 14, 0, 0, 0.75, 25, A('Bite', 5, 2, 6, 3, { extra: [1, 6] }), { burrow: true }),
+    hobgoblin:     M('Hobgoblin shield wall', 3, 22, 18, 1, 1, 0.75, 14, A('Longsword', 4, 1, 10, 1), { shieldwall: true }),
+    imp:           M('Imp', 2, 12, 13, 3, 3, 1.25, 10, A('Sting', 5, 1, 4, 3, { extra: [1, 6] }), { flying: true, invisible: true }),
+    wolfRider:     M('Wolf rider', 3, 40, 14, 2, 2, 1.5, 12, A('Scimitar', 4, 1, 6, 2), { unhorse: { rider: 'goblin', mount: 'direWolf' } }),
+    troll:         M('Troll', 5, 84, 15, 1, 1, 0.75, 45, A('Claws', 7, 2, 6, 4), { regen: 10, multi: 2, fireStops: true }),
+    gelCube:       M('Gelatinous cube', 5, 84, 6, -4, -4, 0.3, 45, A('Pseudopod', 4, 3, 6, 0, SMASH), { engulf: { n: 2, d: 6 } }),
+    rustMonster:   M('Rust monster', 3, 27, 14, 1, 1, 1, 15, A('Antennae', 3, 1, 8, 1), { rust: 2 }),
+    medusa:        M('Medusa', 6, 90, 15, 2, 2, 0.5, 70, A('Longbow', 5, 1, 8, 2, BOW(4)), { gaze: { every: 3, range: 3, dc: 13 } }),
+    vampire:       M('Vampire', 8, 140, 16, 4, 4, 0.75, 120, A('Bite', 9, 1, 8, 4, { extra: [2, 6] }), { undead: true, regen: 10, radiantStops: true, drain: true, charm: { every: 3, range: 2, dc: 15, turns: 2 } }),
+    necromancer:   M('Necromancer', 5, 40, 12, 2, 2, 0.5, 40, A('Chill touch', 5, 2, 8, 0, HEX('shadow', 4)), { raiseDead: { range: 2, max: 3 } }),
+    redDragon:     M('Young red dragon', 10, 220, 18, 0, 0, 0.75, 250, A('Rend', 10, 2, 10, 6), { flying: true, multi: 2, boss: true, breath: { every: 3, n: 6, d: 6, dc: 15 } }),
+    stoneColossus: M('Stone Colossus', 8, 300, 17, -2, -2, 0.3, 200, A('Crushing fist', 8, 3, 10, 5, SMASH),
+                     { multi: 2, resist: true, boss: true }),
+    /* Phase 6: the Delve's bestiary, on the figures it added to the shared minis in 2.3.0 (SRD 5.1 stat blocks, scaled
+       to the mat, except the drowned dead, which are the Delve's own). Each one breaks a rule the heroes rely on. */
+    giantCrab:     M('Giant crab', 1, 13, 15, 1, 1, 1, 6, A('Claw', 3, 1, 6, 1), { shell: true, amphibious: true }),
+    giantFrog:     M('Giant frog', 1, 18, 11, 1, 1, 1.25, 7, A('Bite', 3, 1, 6, 1), { lash: true, amphibious: true }),
+    drowned:       M('Drowned dead', 2, 22, 9, -2, -2, 0.75, 9, A('Sodden grasp', 4, 1, 6, 2), { undead: true, rises: true, amphibious: true }),
+    animatedArmour:M('Animated armour', 2, 26, 17, 0, 0, 0.75, 14, A('Slam', 4, 1, 6, 2), { multi: 2, plate: 2 }),
+    mimic:         M('Mimic', 3, 58, 12, 0, 0, 0.75, 25, A('Pseudopod', 5, 1, 8, 3), { disguise: true, adhesive: true }),
+    mummy:         M('Mummy', 3, 58, 11, -1, -1, 0.5, 30, A('Rotting fist', 5, 2, 6, 3), { undead: true, rot: 3, fireWeak: true }),
+    salamander:    M('Salamander', 5, 90, 15, 2, 2, 1, 45, A('Fiery spear', 7, 2, 6, 4, { extra: [1, 6] }), { multi: 2, heated: { n: 1, d: 6 }, fireImmune: true }),
+    // Phase 7: the bosses of the rest of the house, each standing on a figure the library already has
+    larderOgre:    Object.assign(M('The Larder Ogre', 6, 170, 12, -1, -1, 0.5, 120, A('Meat cleaver', 7, 2, 10, 4, SMASH), { boss: true }), { figure: 'ogre' }),
+    theFerment:    Object.assign(M('The Ferment', 7, 200, 8, -4, -4, 0.3, 140, A('Pseudopod', 6, 3, 6, 2, SMASH), { engulf: { n: 3, d: 6 }, boss: true }), { figure: 'ooze.cube' }),
+    packLeader:    Object.assign(M('The Pack Leader', 7, 170, 15, 3, 3, 1.25, 130, A('Lance and fangs', 7, 2, 8, 4), { boss: true, multi: 2 }), { figure: 'wolf.rider' }),
+    // a huge ankheg that has had the run of the lawn all summer: badly hurt, it goes back under and comes up through a molehill further on
+    lawnThing:     Object.assign(M('The Thing Under the Lawn', 7, 180, 15, 0, 1, 0.75, 140, A('Mandibles', 7, 2, 10, 4, { extra: [2, 6] }), { boss: true, burrow: true, surface: { at: [0.5, 0.25], under: 2 } }), { figure: 'ankheg' }),
+    // the thing at the bottom of the well: it reaches two squares with cold tentacles, swims, and heals in water or the well
+    thingInWell:   Object.assign(M('The Thing in the Well', 8, 280, 15, 1, 1, 0.5, 150, A('Cold tentacles', 8, 3, 8, 4, { fx: 'shadow', range: 2 }), { boss: true, amphibious: true, soak: 20, multi: 2 }), { figure: 'horror' }),
+    // the lodger in the attic: an old vampire who has had the top floor for years. Heals fast unless radiant fire or daylight sears it
+    lodger:        Object.assign(M('The Lodger in the Attic', 9, 220, 16, 4, 4, 0.75, 160, A('Bite', 9, 1, 8, 4, { extra: [3, 6] }), { boss: true, undead: true, regen: 20, radiantStops: true, drain: true, charm: { every: 3, range: 2, dc: 15, turns: 2 } }), { figure: 'vampire' })
+  };
+  // small enough to squeeze three to a square where a battle is crowded (as swarms of rats and bats do in 5e)
+  for (const t of ['direRat', 'kobold', 'goblin', 'goblinArcher', 'goblinShaman', 'caveBat', 'rotGrub', 'imp', 'shadeWisp', 'emberWisp'])
+    MONSTERS[t].traits = Object.assign({}, MONSTERS[t].traits, { small: true });
+  MONSTERS.imp.traits.fiend = true; // holy water burns a fiend as it burns the dead
+
+  /* The belt: throwables from SRD 5.1, bought with the takings, thrown onto one square in battle and hitting everything
+     piled on it. One throw a round. */
+  const THROWS = {
+    holyWater:     { name: 'Holy water', cost: 20, text: '2d6 radiant to each undead or fiend on the square.', n: 2, d: 6, holy: true },
+    alchemistFire: { name: 'Alchemist’s fire', cost: 25, text: 'Sets the square alight: 1d4 fire to each creature there at the start of its turn, for 3 rounds.', aflame: 3 },
+    acid:          { name: 'Acid', cost: 20, text: '2d6 acid to each creature on the square.', n: 2, d: 6 },
+    net:           { name: 'Net', cost: 15, text: 'Holds each creature there that isn’t huge in bulk (under 60 hit points) for 2 rounds: it can’t move.', net: 2 },
+    ballBearings:  { name: 'Ball bearings', cost: 10, text: 'Scattered on the square for 3 rounds: a walker that steps there makes a DC 10 Dex save or falls and loses its next turn.', bearings: 3 }
+  };
+
+  /* Battles. Spawn tokens: type:round, type:round*count for several at once through different doors,
+     and @n on the end to send them through door n of the map (doors are numbered in reading order).
+     Rounds count from the start of the wave. A wave's doors list limits which doors it uses; without one it uses them all.
+     map: one of MAPS below; the cellar floor if left out. */
+  const BATTLES = [
+    { id: 'warren', name: 'The Goblin Warren', gold: 150, by: 'Simz',
+      line: 'Something has been nicking the cheese. Something with a lot of cousins.',
+      waves: [
+        { name: 'Rats in the Cellar', by: 'Simz', line: 'Just rats. Big ones. Lots of them.',
+          spawns: 'direRat:0*2 direRat:3 kobold:5 direRat:7*2 kobold:9 kobold:11' },
+        { name: 'Kobold Tunnels', by: 'Mitz', line: 'Kobolds hit and run. In their own tunnels they mostly hit.',
+          spawns: 'kobold:0*2 goblin:2 kobold:4 goblin:6 caveBat:8 kobold:9*2 goblin:11' },
+        { name: 'Bats in the Rafters', by: 'Simz', line: 'Bats fly straight over your first hero. Keep a second line behind it.',
+          spawns: 'caveBat:0 goblin:1 caveBat:3*2 goblinArcher:5 goblin:6 goblinArcher:8 caveBat:9*2 goblin:11' },
+        { name: "The Shaman's Drums", by: 'Mitz', line: "Archers and shamans stand back and shoot. Rangers can reach them. Fighters can't.",
+          spawns: 'goblin:0*2 goblinArcher:2 goblinShaman:4 goblin:5 kobold:6*2 goblinArcher:8 goblinShaman:10 caveBat:11*2 goblin:12*2' },
+        { name: 'The Goblin Chief', by: 'Simz', line: 'The boss of the goblins. Two axe swings a turn and a very big shield.',
+          spawns: 'goblin:0*2 goblinArcher:1 kobold:2*2 goblinShaman:4 goblin:5*2 goblinChief:7 goblinArcher:8*2 caveBat:9 goblin:10*2 direRat:12*3' }
+      ] },
+    { id: 'caves', dark: true, name: 'The Deep Caves', gold: 200, by: 'Mitz',
+      line: 'The cellar goes deeper than the landlord admits. Things live down there.',
+      waves: [
+        { name: 'Things in the Dark', by: 'Mitz', line: 'Leeches heal themselves on whatever they bite. Don’t let them feed.',
+          spawns: 'direRat:0*2 deepLeech:3 direRat:5 caveBat:7 direRat:8*2 deepLeech:10*2 warrenHound:12' },
+        { name: 'The Hunting Pack', by: 'Simz', line: 'Hounds can sprint two squares at a time. They arrive sooner than you think.',
+          spawns: 'warrenHound:0 warrenHound:2*2 caveSerpent:4 direRat:5*2 warrenHound:7 caveSerpent:9 warrenHound:10*2' },
+        { name: 'Webs', by: 'Mitz', line: 'Spiders and serpents. The poison makes every bite hurt more than it looks.',
+          spawns: 'tombSpider:0 caveSerpent:2 tombSpider:4 deepLeech:5*3 tombSpider:7 caveBat:8*2 caveSerpent:10 tombSpider:12' },
+        { name: 'Wolves and Beetles', by: 'Simz', line: 'Beetle shells shrug off swords and arrows. Fire Bolts go straight through.',
+          spawns: 'direWolf:0 giantBeetle:2 warrenHound:3*2 direWolf:5 giantBeetle:7 tombSpider:8 direWolf:10*2 giantBeetle:12' },
+        { name: 'The Cave Bear Wakes', by: 'Mitz', line: 'Two cave bears, and each one swings twice. Stack your Fighters.',
+          spawns: 'direWolf:0*2 giantBeetle:2 tombSpider:3*2 caveBear:6 warrenHound:7*2 caveSerpent:9 direWolf:10 caveBear:12 deepLeech:13*4' }
+      ] },
+    { id: 'crypt', dark: true, name: 'The Old Crypt', gold: 175, by: 'Simz',
+      line: 'The crypt under the tavern. Whose idea was it to build on a graveyard?',
+      waves: [
+        { name: 'Restless Bones', by: 'Simz', line: 'Skeletons are slow. Rot grubs are slower. Neither of them stops.',
+          spawns: 'skeleton:0 skeleton:2*2 rotGrub:4*2 skeleton:6 skelArcher:8 skeleton:10*2 rotGrub:12*3' },
+        { name: 'Archers on the Stairs', by: 'Mitz', line: 'Skeleton archers shoot from four squares out. Put Rangers in those lanes.',
+          spawns: 'skelArcher:0 skeleton:1*2 skelArcher:3 rotGrub:4*3 skeleton:5 skelArcher:7*2 skeleton:9*2 ghoul:11' },
+        { name: 'Ghouls in the Ossuary', by: 'Simz', line: 'A ghoul’s claws can paralyse. A frozen hero loses a turn.',
+          spawns: 'ghoul:0 skeleton:1*2 ghoul:3 shadeWisp:5 skelArcher:6 ghoul:7*2 shadeWisp:9 skeleton:10*2 ghoul:12' },
+        { name: 'The Crypt Guard', by: 'Mitz', line: 'Halberds reach two squares. Bone Knights shrug off steel.',
+          spawns: 'boneKnight:0 skeleton:1*2 cryptWarden:3 skelArcher:4*2 boneKnight:6 ghoul:7 shadeWisp:8*2 cryptWarden:10 skeleton:11*3' },
+        { name: 'The Shade of Grelminar', by: 'Simz', line: 'The old sorcerer himself. He heals, and he calls up wisps to fight for him.',
+          spawns: 'skeleton:0*3 ghoul:2 skelArcher:3*2 boneKnight:5 shade:7 cryptWarden:8 shadeWisp:9*2 ghoul:11*2 skeleton:13*3' }
+      ] },
+    { id: 'vaults', name: 'The Wine Vaults', map: 'pillars', gold: 150, by: 'Mitz',
+      line: 'Smugglers have been using the wine vaults. The pillars are older than the tavern, and very much in the way.',
+      waves: [
+        { name: "Smugglers' Run", by: 'Mitz', line: 'Pillars block the way and the view. Monsters walk round them, and nobody shoots through them.',
+          spawns: 'goblin:0*2 kobold:1 brigand:3 goblin:4*2 brigand:6 kobold:7*2 brigand:9*2 goblin:11*2' },
+        { name: 'Archers in the Racks', by: 'Simz', line: 'An archer behind a pillar cannot hit you, and you cannot hit it. Wait for it to step out.',
+          spawns: 'goblinArcher:0 brigand:1*2 brigandArcher:3 goblinArcher:4*2 brigand:6*2 brigandArcher:8 orcRaider:9*3 brigand:11*2' },
+        { name: 'Rats in the Barrels', by: 'Mitz', line: 'Everything that lived in the barrels has had enough of the smugglers.',
+          spawns: 'direRat:0*3 warrenHound:2*2 direRat:3*2 orcRaider:5*2 warrenHound:7*2 caveBat:8*2 orcRaider:10*3 direRat:12*4' },
+        { name: 'The Cellar Gang', by: 'Simz', line: 'The mage throws lightning from four squares out. A pillar between you is the best armour in the vaults.',
+          spawns: 'brigand:0*2 orc:2 brigandArcher:3*2 renegadeMage:5 orc:6*2 brigand:8 goblinShaman:9 brigandArcher:10*2 orc:12' },
+        { name: 'The Muscle', by: 'Mitz', line: 'The smugglers brought an ogre. Then they brought another one.',
+          spawns: 'orc:0*2 brigand:1*2 brigandArcher:3 ogre:5 orcRaider:6*3 renegadeMage:8 ogre:10 brigand:11*2 orcChampion:13 orcRaider:14*3' }
+      ] },
+    { id: 'road', name: 'The Warband Road', gold: 200, by: 'Mitz',
+      line: 'Bandits on the road, orcs behind them, and a priest nobody trusts.',
+      waves: [
+        { name: 'Highwaymen', by: 'Mitz', line: 'Your money or your life. They would prefer both.',
+          spawns: 'brigand:0 brigand:2*2 brigandArcher:4 brigand:6 brigandArcher:8*2 brigand:10*2' },
+        { name: 'Orcs on the Road', by: 'Simz', line: 'The raiders are quick. The big ones with axes hit hardest.',
+          spawns: 'orcRaider:0*2 orc:2 brigand:3 orcRaider:5*2 orc:7 brigandArcher:8 orcRaider:10*2 orc:12' },
+        { name: 'The Marsh Path', by: 'Mitz', line: 'Lizardfolk spears reach two squares, and the mage throws lightning from four.',
+          spawns: 'lizardfolk:0 lizardfolk:2 orcRaider:3*2 renegadeMage:5 lizardfolk:7*2 brigandArcher:8 orc:10 renegadeMage:12' },
+        { name: 'The Dark Chapel', by: 'Simz', line: 'The Fallen Priest patches up the monsters around him. Take him down first.',
+          spawns: 'fallenPriest:0 orc:1*2 brigand:3*2 renegadeMage:4 lizardfolk:6 fallenPriest:8 orcRaider:9*3 ogre:11' },
+        { name: 'The Warband', by: 'Mitz', line: 'Champions swing twice, the ogre swings hard, and everyone is angry.',
+          spawns: 'orcRaider:0*3 orc:2*2 fallenPriest:4 orcChampion:6 brigandArcher:7*2 ogre:9 renegadeMage:10 orc:11*2 orcChampion:13 orcRaider:14*3' }
+      ] },
+    { id: 'march', name: 'The Hobgoblin March', gold: 250, by: 'Simz',
+      cats: { warlock: 'Eldritch Blast is magic, so the shield wall does not stop it.', monk: 'No armour for the rust monsters to eat.', druid: 'Produce Flame stops the trolls healing.' },
+      line: 'Hobgoblins march in step, and they have brought everything that bites, burrows and rusts.',
+      waves: [
+        { name: 'Shields Up', by: 'Simz', line: 'A shield wall: arrows at anything behind a hobgoblin go wide. Spells do not.',
+          spawns: 'goblin:0*2 kobold:1 goblinArcher:3 hobgoblin:4 goblin:5*2 hobgoblin:7 goblinArcher:9*2 hobgoblin:11*2' },
+        { name: 'Wolf Riders', by: 'Mitz', line: 'Knock a rider off and you have a goblin and a wolf to deal with.',
+          spawns: 'wolfRider:0 goblin:1*2 wolfRider:3*2 hobgoblin:5 direWolf:6 wolfRider:8 hobgoblin:9*2 wolfRider:11*2' },
+        { name: 'Under the Floor', by: 'Simz', line: 'Ankhegs burrow under your first hero and come up behind it.',
+          spawns: 'ankheg:0 hobgoblin:1*2 ankheg:3 wolfRider:4 rustMonster:5 ankheg:7*2 hobgoblin:8*2 rustMonster:10 ankheg:12' },
+        { name: 'Rust and Iron', by: 'Mitz', line: 'Rust monsters eat armour. Your Fighters will not thank you.',
+          spawns: 'rustMonster:0*2 hobgoblin:1*2 rustMonster:3 orc:4*2 ankheg:6 rustMonster:7*2 hobgoblin:9*3 troll:11' },
+        { name: 'The Trolls', by: 'Simz', line: 'Trolls heal ten a turn, unless something has just set them on fire.',
+          spawns: 'troll:0 hobgoblin:1*3 wolfRider:3*2 troll:5 rustMonster:6*2 ankheg:8 troll:10 hobgoblin:11*3 wolfRider:13*2' }
+      ] },
+    { id: 'flooded', dark: true, name: 'The Sunken Chapel', map: 'flooded', gold: 200, by: 'Simz',
+      line: 'The chapel under the crypt has flooded. The water is cold, black, and not empty.',
+      waves: [
+        { name: 'Black Water', by: 'Simz', line: 'Wading is slow, so walkers go round the water if they can. Most of them can.', doors: [1, 2, 3],
+          spawns: 'skeleton:0*2 ghoul:2 deepLeech:3*2 skeleton:4*2 caveSerpent:6 skeleton:8*2 ghoul:9 deepLeech:11*3' },
+        { name: 'The Font', by: 'Mitz', line: 'The old font still blesses the square beside it. Undead that start a turn there burn.', doors: [1, 2, 3],
+          spawns: 'skeleton:0*3 skelArcher:2 ghoul:3*2 lizardfolk:5 skeleton:6*3 skelArcher:8*2 ghoul:10*2 lizardfolk:12' },
+        { name: 'The Side Doors', by: 'Simz', line: 'The side doors have rusted open. Watch the corners.',
+          spawns: 'ghoul:0@0 ghoul:0@4 skeleton:1*3 lizardfolk:3*2 shadeWisp:5*2 skelArcher:7@0 skelArcher:7@4 ghoul:8*3 wight:10 caveSerpent:11*2' },
+        { name: 'Drowned Knights', by: 'Mitz', line: 'Bone Knights in rusted mail, still marching. Steel barely dents them.',
+          spawns: 'boneKnight:0*2 skeleton:1*3 wight:3 cryptWarden:5*2 ghoul:6*3 boneKnight:8@0 wight:9*2 shadeWisp:10*2 skeleton:12*3' },
+        { name: 'High Water', by: 'Simz', line: 'Everything that was under the water, all at once.',
+          spawns: 'wight:0*2 skeleton:1*3 boneTitan:3 wraith:4 ghoul:6@0 ghoul:6@4 cryptWarden:7*2 wight:9*3 wraith:10*2 boneTitan:12 skeleton:13*4' }
+      ] },
+    { id: 'barrow', dark: true, name: 'The Barrow', gold: 250, by: 'Simz',
+      line: 'The barrow kings are waking up. Bring torches. Bring Wizards.',
+      waves: [
+        { name: 'Barrow Mist', by: 'Simz', line: 'Wights drink the life they take. Hit them hard and fast.',
+          spawns: 'ghoul:0*2 skeleton:2*2 wight:4 ghoul:6 skelArcher:7*2 wight:9 skeleton:10*3' },
+        { name: 'The Wights Walk', by: 'Mitz', line: 'More wights. Someone has been opening tombs.',
+          spawns: 'wight:0 wight:2 ghoul:3*2 skelArcher:5 wight:7*2 skeleton:8*3 boneKnight:10' },
+        { name: 'Cold Hands', by: 'Simz', line: 'Wraiths fly over your first hero, drink life and laugh at swords. Wizards, please.',
+          spawns: 'wraith:0 skeleton:1*2 wight:3 wraith:5 ghoul:6*2 wraith:8 skelArcher:9*2 wight:11' },
+        { name: 'The Bone Titan', by: 'Mitz', line: 'A skeleton the size of a barn, swinging a thigh bone. Steel barely scratches it.',
+          spawns: 'boneTitan:0 skeleton:1*3 wraith:3 wight:5 boneTitan:7 ghoul:8*2 cryptWarden:10 wraith:11' },
+        { name: 'The Barrow Lich', by: 'Simz', line: 'The barrow king. Deathbolts from four squares, and a fresh skeleton every third turn.',
+          spawns: 'wight:0*2 skeleton:1*3 wraith:3 barrowLich:5 boneTitan:7 ghoul:8*2 wight:10 wraith:12 skeleton:13*3' }
+      ] },
+    { id: 'bridge', dark: true, name: 'The Long Drop', map: 'bridge', gold: 250, by: 'Mitz',
+      cats: { tinker: 'Every walker has to cross the bridge. Traps there catch them all.' },
+      line: 'A chasm under the cellar, one narrow bridge, and a great many wings.',
+      waves: [
+        { name: 'The Bridge', by: 'Mitz', line: 'Walkers have to cross on the bridge in the middle row. Bats do not bother.',
+          spawns: 'goblin:0*2 kobold:2*2 caveBat:3 caveBat:5*2 warrenHound:6 goblin:7*3 caveBat:8*2 orcRaider:9*2 caveBat:11*2' },
+        { name: 'High Ground', by: 'Simz', line: 'A hero on a raised ledge gets +2 to hit. Shoot across the chasm from there.',
+          spawns: 'orcRaider:0*2 goblinArcher:2*2 caveBat:3*3 orc:5*2 warrenHound:6*2 caveBat:8*3 orc:10*2 direWolf:12*2' },
+        { name: 'Gargoyle Roost', by: 'Mitz', line: 'Gargoyles fly straight over the chasm, and they are rude about swords.',
+          spawns: 'gargoyle:0 caveBat:1*3 orc:3*2 gargoyle:5 lizardfolk:6 caveBat:7*3 gargoyle:9 orcRaider:10*3' },
+        { name: 'Cold Wind', by: 'Simz', line: 'Wraiths drift over the drop as if it was not there. Wizards, please.',
+          spawns: 'wraith:0 gargoyle:2 orc:3*2 wraith:5 caveBat:6*3 ogre:8 gargoyle:9*2 wraith:11' },
+        { name: 'The Crossing', by: 'Mitz', line: 'Everything at once, on foot and on wings.',
+          spawns: 'gargoyle:0*2 orcChampion:2 caveBat:3*4 wraith:5 ogre:6 gargoyle:8*2 wraith:9*2 orcChampion:11 caveBat:12*4 ogre:13' }
+      ] },
+    { id: 'halls', name: 'The Deep Halls', gold: 300, by: 'Mitz',
+      cats: { sorcerer: 'Lightning is magic, and the stone things here shrug off steel.' },
+      line: 'Below everything, the old halls. Stone that walks, and dark that eats.',
+      waves: [
+        { name: 'Embers', by: 'Mitz', line: 'Ember wisps kindle new wisps. Glooms split in two when hurt. It gets crowded.',
+          spawns: 'emberWisp:0 gloom:2 emberWisp:4*2 gloom:6 emberWisp:8 gloom:10*2' },
+        { name: 'Stone Wings', by: 'Simz', line: 'Gargoyles: flying, made of stone, and rude about swords.',
+          spawns: 'gargoyle:0 emberWisp:2 gargoyle:3*2 gloom:5 gargoyle:7 emberWisp:9*2 gargoyle:11' },
+        { name: 'The Iron Sentinels', by: 'Mitz', line: 'They repair themselves every turn. Focus your fire.',
+          spawns: 'ironSentinel:0 gargoyle:2 ironSentinel:4 gloom:5*2 emberWisp:7*2 ironSentinel:9 gargoyle:11*2' },
+        { name: 'Clay and Dark', by: 'Simz', line: 'A golem, and something with too many eyes. Try not to look at it for long.',
+          spawns: 'clayGolem:0 gloom:2 ironSentinel:4 deepHorror:6 emberWisp:7*2 clayGolem:9 gargoyle:10*2 gloom:12' },
+        { name: 'The Stone Colossus', by: 'Mitz', line: 'The biggest thing under the tavern. Two fists, and swords barely chip it.',
+          spawns: 'gargoyle:0*2 ironSentinel:2 clayGolem:4 stoneColossus:6 emberWisp:7*3 deepHorror:9 gloom:10*2 ironSentinel:12 gargoyle:13*2' }
+      ] },
+    { id: 'lair', dark: true, name: 'The Red Wyrm’s Lair', map: 'bridge', gold: 300, by: 'Simz',
+      cats: { paladin: 'Its light shows up the imps, and its smite is twice as hard on the dead.' },
+      line: 'Under everything else, past the halls, something warm is breathing.',
+      waves: [
+        { name: 'Imps in the Dark', by: 'Simz', line: 'Imps are invisible unless a Cleric, a Paladin or holy water is close by.',
+          spawns: 'skeleton:0*2 imp:2 skeleton:3*2 imp:5 skelArcher:6 skeleton:7*2 imp:9*2 skeleton:11*2' },
+        { name: 'The Necromancer', by: 'Mitz', line: 'Every monster that falls near a necromancer gets back up again.',
+          spawns: 'necromancer:0 skeleton:1*3 imp:2*2 ghoul:4*2 necromancer:6 skeleton:7*3 imp:9*2 ghoul:10*2' },
+        { name: 'The Cube', by: 'Simz', line: 'A gelatinous cube swallows a hero whole and carries it off. Kill it to get them back.',
+          spawns: 'gelCube:0 imp:1*2 skeleton:2*3 necromancer:4 gelCube:6 ghoul:7*2 imp:8*3 gelCube:10 skeleton:11*3' },
+        { name: 'Stone and Blood', by: 'Mitz', line: 'The medusa turns heroes to stone. The vampire turns them against you.',
+          spawns: 'medusa:0 skeleton:1*3 imp:2*2 vampire:4 necromancer:5 gelCube:7 ghoul:8*2 medusa:10 imp:11*3' },
+        { name: 'The Red Wyrm', by: 'Simz', line: 'A young red dragon. It flies, and its breath fills a whole row with fire.',
+          spawns: 'imp:0*3 skeleton:1*3 vampire:2 redDragon:4 necromancer:5 imp:6*3 medusa:8 gelCube:9 ghoul:10*2 imp:12*3' }
+      ] },
+    // Phase 6: battles on the new shapes
+    { id: 'stores', map: 'corner', name: 'The Back Stores', gold: 250, by: 'Simz',
+      line: 'The back stores turn a corner. Two doors at the far end, and two more round the bend.',
+      waves: [
+        { name: 'Round the Bend', by: 'Simz', line: 'Half of them come round the corner. Keep a hero where the two halves meet.',
+          spawns: 'orcRaider:0*2 goblin:1*2 orcRaider:3*2 goblinArcher:4*2 orc:6*2 kobold:7*2 orcRaider:9*2 orc:11*2' },
+        { name: 'Wolves in the Stores', by: 'Mitz', line: 'Wolf riders, and the wolves keep going when the riders fall.',
+          spawns: 'wolfRider:0*2 direWolf:2*2 orc:3*2 wolfRider:5*2 goblinArcher:6*2 direWolf:8*2 wolfRider:10*2 orc:12*2' },
+        { name: 'Shield Wall', by: 'Simz', line: 'Hobgoblins in a line. Arrows at anything behind them go wide.',
+          spawns: 'hobgoblin:0*2 goblinArcher:1*2 hobgoblin:3*2 orc:4*2 brigandArcher:6*2 hobgoblin:8*2 orcChampion:10 wolfRider:11*2' },
+        { name: 'The Quartermaster', by: 'Mitz', line: 'Ogres carrying the stores out, and orcs carrying the ogres’ things.',
+          spawns: 'ogre:0 orc:1*3 hobgoblin:2*2 ogre:4 wolfRider:5*2 orcChampion:7 orc:8*3 ogre:10 brigandArcher:11*2 orcChampion:12' },
+        { name: 'Everything at Once', by: 'Simz', line: 'They have found a way round the corner and down the long side at once.',
+          spawns: 'troll:0 orc:1*3 wolfRider:2*2 ogre:3 hobgoblin:4*2 orcChampion:6*2 troll:8 ogre:9 wolfRider:10*2 orc:12*3' }
+      ] },
+    { id: 'crossing', map: 'crossing', name: 'The Old Crossing', gold: 250, by: 'Mitz',
+      line: 'Two passages cross under the yard. Things come down from above, up from below, and straight along.',
+      waves: [
+        { name: 'From Above', by: 'Mitz', line: 'Something comes down the passage at the top. Watch where it joins the main way.',
+          spawns: 'skeleton:0*3 ghoul:1*2 skeleton:2*2 skelArcher:3*2 ghoul:4*2 skeleton:6*3 ghoul:7*2 skelArcher:9*2 ghoul:11*2' },
+        { name: 'From Below', by: 'Simz', line: 'And now from underneath as well, with imps you can’t see unless there’s a light near them.',
+          spawns: 'ghoul:0*3 imp:1*2 skeleton:2*3 boneKnight:3 imp:5*2 wight:6 skelArcher:7*2 imp:9*2 ghoul:10*3 skeleton:12*2' },
+        { name: 'The Cult', by: 'Mitz', line: 'Fallen priests heal the dead, and renegade mages throw fire. Reach the back rows.',
+          spawns: 'fallenPriest:0 imp:1*2 renegadeMage:2 ghoul:3*2 imp:4*2 boneKnight:5 fallenPriest:6 skelArcher:7*2 imp:8*2 renegadeMage:9 wight:10 ghoul:12*2' },
+        { name: 'The Long Walk', by: 'Simz', line: 'Wraiths fly over your first hero, and wights drink what they hit.',
+          spawns: 'wraith:0 wight:1 skeleton:2*3 boneKnight:4*2 fallenPriest:7 ghoul:8*3 wight:10 skeleton:12*2' },
+        { name: 'The Crossroads Bell', by: 'Mitz', line: 'The bell under the crossing rings, and the bone titan answers.',
+          spawns: 'boneKnight:0*2 wight:1 ghoul:2*3 boneTitan:4 fallenPriest:6 skeleton:7*3 wraith:9 boneKnight:10*2 ghoul:12*2' }
+      ] },
+    { id: 'kennels', map: 'horseshoe', name: 'The Kennels', gold: 275, by: 'Simz',
+      line: 'The old kennels run round in a horseshoe: in at the far end, all the way round, and out at our end.',
+      waves: [
+        { name: 'Let Out', by: 'Simz', line: 'They come all the way round. Shooters can see up and down the long sides here.',
+          spawns: 'warrenHound:0*2 direRat:1*3 warrenHound:3*2 caveSerpent:5*2 direRat:6*3 warrenHound:8*2 caveSerpent:10*2 direWolf:12' },
+        { name: 'The Pack', by: 'Mitz', line: 'Dire wolves, quick and hungry.',
+          spawns: 'direWolf:0*2 warrenHound:1*2 direWolf:3*2 caveSerpent:4*2 direWolf:6*2 giantBeetle:8*2 direWolf:10*2 warrenHound:12*2' },
+        { name: 'Things That Crawl', by: 'Simz', line: 'Beetles and tomb spiders, slow and hard to put down.',
+          spawns: 'giantBeetle:0*2 tombSpider:1*2 giantBeetle:3*2 direWolf:4*2 tombSpider:6*2 giantBeetle:8*2 caveBear:10 tombSpider:12*2' },
+        { name: 'Bears', by: 'Mitz', line: 'Cave bears. Big, and in no hurry.',
+          spawns: 'caveBear:0 direWolf:1*3 caveBear:3 giantBeetle:4*2 tombSpider:6*2 caveBear:8 direWolf:9*3 caveBear:11 warrenHound:12*3' },
+        { name: 'The Kennel Master', by: 'Simz', line: 'An ogre with a whip, and everything it keeps.',
+          spawns: 'ogre:0 caveBear:1 direWolf:2*3 tombSpider:3*2 ogre:5 caveBear:6 giantBeetle:7*2 direWolf:9*3 ogre:11 caveBear:12' }
+      ] },
+    { id: 'runs', crowds: true, name: 'The Rat Runs', gold: 275, by: 'Mitz',
+      line: 'Under the floorboards the rats have dug their own cellar. In here the small ones squeeze in three to a square.',
+      waves: [
+        { name: 'Squeaking', by: 'Mitz', line: 'Rats pile up three to a square. Throw something at the pile: the belt is in the armoury.',
+          spawns: 'direRat:0*2 direRat:2*3 kobold:4*2 direRat:7*3 kobold:9*2 direRat:12*2' },
+        { name: 'Wings in the Dark', by: 'Simz', line: 'Bats and grubs, squeezed in with the rats.',
+          spawns: 'caveBat:0*2 direRat:1*3 rotGrub:3*2 caveBat:5*3 kobold:6*2 rotGrub:8*2 direRat:10*3 goblin:12*2' },
+        { name: 'Goblin Tunnels', by: 'Mitz', line: 'Goblins came down the runs to see what the fuss was.',
+          spawns: 'goblin:0*3 goblinArcher:1*2 direRat:3*3 goblin:5*2 goblinShaman:6 kobold:7*3 goblinArcher:9*2 warrenHound:11*2 direRat:12*2' },
+        { name: 'Imps', by: 'Simz', line: 'Imps, unseen unless there’s a light near them. Holy water finds them anyway.',
+          spawns: 'imp:0*2 goblin:1*3 imp:3*2 caveBat:5*2 goblinShaman:6 imp:7*2 kobold:8*3 goblinArcher:10*2 direRat:12*3' },
+        { name: 'The Rat King', by: 'Mitz', line: 'The goblin chief has moved in with the rats, and brought everyone.',
+          spawns: 'direRat:0*3 goblin:1*3 imp:2*2 caveBat:4*2 goblinChief:5 goblinShaman:6 direRat:7*3 goblinArcher:9*2 imp:10*2 warrenHound:11*2 goblin:12*2' }
+      ] },
+    // Phase 6: three battles for the Delve's monsters
+    { id: 'cistern', map: 'flooded', name: 'The Drowned Cistern', gold: 300, by: 'Mitz',
+      line: 'Under the cellar there is an old cistern. It was dry, once. Something has been climbing out of it.',
+      waves: [
+        { name: 'Wet Feet', by: 'Mitz', line: 'Giant crabs: arrows skate off their shells, and water doesn’t slow them.',
+          spawns: 'deepLeech:0*2 giantCrab:2*2 deepLeech:4*2 giantCrab:6*2 caveSerpent:8 giantCrab:10*2 deepLeech:12*2' },
+        { name: 'Croaking', by: 'Simz', line: 'Giant frogs. That tongue reaches past your first hero to whoever stands behind.',
+          spawns: 'giantFrog:0*2 giantCrab:1*2 giantFrog:3*3 caveSerpent:5*2 giantFrog:7*3 giantCrab:9*3 lizardfolk:11*2 giantFrog:12*2' },
+        { name: 'The Drowned', by: 'Mitz', line: 'They get back up once. A holy blow or a critical keeps them down.',
+          spawns: 'drowned:0*2 giantCrab:1*2 drowned:3*2 giantFrog:4*2 drowned:6*3 lizardfolk:8*2 drowned:10*3 giantFrog:12*3' },
+        { name: 'Out of the Deep', by: 'Simz', line: 'Everything that lived down there, and some of what died.',
+          spawns: 'lizardfolk:0*2 drowned:1*3 giantFrog:2*2 giantCrab:3*3 troll:5 drowned:6*3 lizardfolk:8*2 giantFrog:9*3 drowned:11*3 giantCrab:12*3' },
+        { name: 'The Thing in the Cistern', by: 'Mitz', line: 'Something big has come up for air.',
+          spawns: 'drowned:0*3 giantFrog:1*3 giantCrab:2*3 lizardfolk:3*2 deepHorror:5 drowned:6*3 troll:8 giantFrog:9*3 drowned:11*3 giantCrab:12*3' }
+      ] },
+    { id: 'tomb', name: 'The Sealed Tomb', gold: 300, by: 'Simz',
+      line: 'Behind the barrow there was a door with a seal on it. There isn’t now.',
+      waves: [
+        { name: 'Grave Goods', by: 'Simz', line: 'Treasure chests on the mat? One of them has teeth. It wakes when a hero comes close.',
+          spawns: 'skeleton:0*2 skeleton:2*2 mimic:4 skelArcher:5*2 skeleton:8*2 skelArcher:10 boneKnight:12' },
+        { name: 'The Guard', by: 'Mitz', line: 'Animated armour. Every hit does two less, so bring big hits or spells.',
+          spawns: 'animatedArmour:0 skeleton:1*2 animatedArmour:3*2 skelArcher:5*2 animatedArmour:8 skeleton:10*2 boneKnight:12' },
+        { name: 'Wrapped', by: 'Simz', line: 'Mummies. Anyone they hit can’t be healed for three rounds. They burn well, though.',
+          spawns: 'mummy:0 skeleton:1*3 mummy:3*2 animatedArmour:5 mummy:7 skelArcher:8*2 skeleton:10*2 mummy:12*2' },
+        { name: 'The Inner Chamber', by: 'Mitz', line: 'Mummies, armour and chests that bite.',
+          spawns: 'mummy:0*2 animatedArmour:1 mimic:2 skeleton:3*3 mummy:5*2 animatedArmour:6*2 wight:8 mummy:10*2 boneKnight:12*2' },
+        { name: 'Whoever Was Sealed In', by: 'Simz', line: 'The barrow lich has been waiting a long time for visitors.',
+          spawns: 'mummy:0*2 animatedArmour:1*2 skeleton:2*3 mimic:3 barrowLich:5 mummy:6*2 wight:8 animatedArmour:9*2 mummy:11*2 skelArcher:12*2' }
+      ] },
+    { id: 'forge', map: 'bridge', name: 'The Old Forge', gold: 300, by: 'Mitz',
+      line: 'The tavern’s old forge sits over the chasm, and the fire in it has started to walk about.',
+      waves: [
+        { name: 'Sparks', by: 'Mitz', line: 'Ember wisps and animated armour, the forge’s old work.',
+          spawns: 'emberWisp:0*2 animatedArmour:1*2 emberWisp:3*2 animatedArmour:5*2 emberWisp:7*3 gargoyle:9 animatedArmour:11*2 emberWisp:12*2' },
+        { name: 'Salamanders', by: 'Simz', line: 'Hot to the touch: hit one up close and you’ll burn. Fire does nothing to them.',
+          spawns: 'salamander:0 emberWisp:1*3 animatedArmour:3*2 salamander:5 emberWisp:6*3 gargoyle:8 salamander:10 animatedArmour:12' },
+        { name: 'The Bellows', by: 'Mitz', line: 'Iron sentinels and clay golems, still at their posts.',
+          spawns: 'ironSentinel:0 salamander:2 animatedArmour:3*2 clayGolem:5 emberWisp:6*3 salamander:8 ironSentinel:9 gargoyle:11*2 emberWisp:12*3' },
+        { name: 'White Heat', by: 'Simz', line: 'Everything in the forge at once.',
+          spawns: 'salamander:0 animatedArmour:1*2 emberWisp:2*3 clayGolem:4 salamander:6*2 gargoyle:7 ironSentinel:9 salamander:11 animatedArmour:12*2' },
+        { name: 'The Smith', by: 'Mitz', line: 'Whatever built all of this is still here, and it is made of stone.',
+          spawns: 'salamander:0*2 animatedArmour:1*3 emberWisp:2*3 stoneColossus:4 salamander:6*2 clayGolem:7 gargoyle:8*2 salamander:10*2 animatedArmour:12*3' }
+      ] },
+    // Phase 7: the rest of the house. These open once the Red Wyrm's Lair is won, part by part.
+    { id: 'larder', stage: 2, part: 'kitchens', map: 'larder', name: 'The Larder', gold: 275, by: 'Mitz',
+      line: 'Something has been at the cheese. The larder floor has two old trapdoors, and they are not as shut as they look.',
+      waves: [
+        { name: 'Cheese Thieves', by: 'Mitz', line: 'Rats and kobolds through the back doors. You can stand on the trapdoors, for now.',
+          spawns: 'direRat:0*2 kobold:2 direRat:4*2 kobold:6 goblin:8 direRat:10*2 kobold:12' },
+        { name: 'A Chest That Wasn’t There', by: 'Simz', line: 'Goblins, and a chest nobody remembers buying.',
+          spawns: 'goblin:0*2 goblinArcher:2 mimic:3 goblin:5*2 kobold:7*2 goblinShaman:8 goblinArcher:10*2 goblin:12' },
+        { name: 'Up Through the Floor', by: 'Mitz', line: 'The first trapdoor bursts open. Anyone standing on it goes flying and loses a turn.',
+          spawns: 'orc:0@1 goblin:1*3 orc:2@1 rotGrub:4*2 orcRaider:5*2 orc:7@1 goblin:8*2 orcRaider:10*2' },
+        { name: 'The Other Trapdoor', by: 'Simz', line: 'This one is right behind the front line.',
+          spawns: 'hobgoblin:0*2 orc:1@4 goblinArcher:2*2 orc:3@1 hobgoblin:5*2 orcRaider:6@4 mimic:8 orc:9*2 orcRaider:11@4 hobgoblin:12*2 orc:13@1' },
+        { name: 'Everything Comes Up', by: 'Mitz', line: 'Both trapdoors and every door at once.',
+          spawns: 'ogre:0 orc:1@1 orc:2@4 hobgoblin:3*2 orcRaider:4@1 goblinArcher:5*2 ogre:7 orc:8@4 orcChampion:10 orcRaider:11*2 ogre:12@1 orcChampion:13 hobgoblin:14*2' }
+      ] },
+    { id: 'scullery', stage: 2, part: 'kitchens', map: 'scullery', crowds: true, name: 'The Scullery', gold: 275, by: 'Simz',
+      line: 'Two ways in and one way out, past the ovens. In here the small ones squeeze in three to a square.',
+      waves: [
+        { name: 'Through the Scullery', by: 'Simz', line: 'They come down both sides and meet in the middle.',
+          spawns: 'direRat:0*3 direRat:1*3 kobold:3*2 rotGrub:5*2 direRat:7*3 kobold:9*2 direRat:11*3' },
+        { name: 'Hot Work', by: 'Mitz', line: 'The ovens flare every few rounds and burn whatever stands in front of them. Let the monsters walk past them.',
+          spawns: 'goblin:0*2 imp:2*2 goblin:4*2 rotGrub:6*2 goblinArcher:7*2 goblin:10*2' },
+        { name: 'Ember Wisps', by: 'Simz', line: 'Every few turns a wisp sparks off another. Catch them before they fill the scullery.',
+          spawns: 'emberWisp:0*2 kobold:1*2 emberWisp:4*2 goblin:5*2 emberWisp:8 goblinShaman:9 kobold:11*2' },
+        { name: 'Orcs in the Scullery', by: 'Mitz', line: 'Bigger ones now, down both sides.',
+          spawns: 'orc:0*2 orcRaider:1*2 goblin:2*3 orc:4*2 hobgoblin:6*2 orcRaider:7*2 goblinArcher:9*2 orc:11*2' },
+        { name: 'What Lives in the Big Oven', by: 'Simz', line: 'Salamanders. Fire won’t touch them either.',
+          spawns: 'salamander:0 imp:1*2 orc:2*2 emberWisp:3*2 hobgoblin:5*2 goblin:7*3 salamander:9 orcChampion:11' }
+      ] },
+    { id: 'kitchen', stage: 2, part: 'kitchens', map: 'kitchen', name: 'The Great Kitchen', gold: 300, by: 'Mitz',
+      line: 'Ovens along both walls, two hatches in the floor, and something very large in the larder.',
+      waves: [
+        { name: 'Kitchen Porters', by: 'Mitz', line: 'Orcs carrying sacks. The sacks are full of goblins.',
+          spawns: 'goblin:0*2 orc:2 kobold:3*2 orcRaider:5*2 goblin:6*2 orc:8*2 goblinArcher:10*2 orcRaider:12' },
+        { name: 'Through the Hatch', by: 'Simz', line: 'The middle hatch opens. Keep it clear, or keep someone tough on it.',
+          spawns: 'hobgoblin:0*2 orc:1@2 orcRaider:2*2 orc:4@2 goblinArcher:5*2 hobgoblin:7*2 orc:9@2 ogre:11' },
+        { name: 'The Second Hatch', by: 'Mitz', line: 'Now the one by the far oven.',
+          spawns: 'ogre:0 orc:1@4 imp:2*2 orcRaider:3*2 hobgoblin:5*2 ogre:7 orc:8@4 goblinShaman:9 orcChampion:11' },
+        { name: 'Grease Fire', by: 'Simz', line: 'Salamanders and wisps. The ovens are on their side for this one.',
+          spawns: 'salamander:0 emberWisp:1*2 orc:2*2 hobgoblin:4*2 imp:5*2 ogre:7 orcRaider:8*2 emberWisp:10*2 orcChampion:12' },
+        { name: 'The Larder Ogre', by: 'Mitz', line: 'Whatever ate the cheese is the size of the larder door, and it has a cleaver.',
+          spawns: 'larderOgre:0 orc:1*2@2 ogre:3 hobgoblin:4*2 orcRaider:5*2@4 orcChampion:7 imp:8*2 ogre:10 orc:11*3' }
+      ] },
+    { id: 'racks', stage: 2, part: 'brewhouse', map: 'racks', crowds: true, name: 'The Racks', gold: 275, by: 'Simz',
+      line: 'The racks run back and forth across the brewhouse cellar, and the barrels run down them. A third door opens straight onto the last run, and the small ones come through three at a time.',
+      waves: [
+        { name: 'Barrels Coming', by: 'Simz', line: 'Every few rounds a barrel rolls down a chute. It bowls over anything in its way, heroes too. A barricade stops it.',
+          spawns: 'goblin:0*2 kobold:2*3 direRat:3*3 goblin:5*3 kobold:6*2 goblinArcher:8*2 direRat:9*3 goblin:11*3 orcRaider:13*2' },
+        { name: 'Smugglers', by: 'Mitz', line: 'Someone has been carrying ale out through the cellar.',
+          spawns: 'brigand:0*2 goblin:1*3 goblinArcher:2*2 kobold:3*3 brigandArcher:5*2 goblin:6*3 brigand:8*2 orcRaider:9*2@2 goblin:11*3 brigand:13*2' },
+        { name: 'Down the Racks', by: 'Simz', line: 'Three runs to the bottom. The bends are where to hit them.',
+          spawns: 'orcRaider:0*2 goblin:1*3@2 giantBeetle:2 brigand:3*2 goblin:5*3 orc:6*2 brigandArcher:7*2 orcRaider:8*2@2 giantBeetle:10 kobold:11*3 orc:12*2 ogre:14' },
+        { name: 'The Long Way Round', by: 'Mitz', line: 'Wolf riders, quick down the straights.',
+          spawns: 'hobgoblin:0*2 wolfRider:1*2@2 goblin:2*3 brigand:3*2 orc:4*2 renegadeMage:6 hobgoblin:7*2 wolfRider:8*2 goblin:9*3@2 brigandArcher:10*2 troll:12 orcChampion:13@2 ogre:14' },
+        { name: 'Rolling Thunder', by: 'Simz', line: 'Ogres. A barrel won’t knock an ogre over; it just breaks on it.',
+          spawns: 'ogre:0 orcChampion:1@2 goblin:2*3 brigand:3*3 wolfRider:4*2@2 troll:5 ogre:6 renegadeMage:7 hobgoblin:8*2 goblin:9*3@2 orcChampion:10 brigandArcher:11*2 ogre:12@2 troll:14 orcChampion:15*2 troll:16@2' }
+      ] },
+    { id: 'vats', stage: 2, part: 'brewhouse', map: 'vats', name: 'The Vat Room', gold: 275, by: 'Mitz',
+      line: 'Five runs past the vats, and a barrel chute down every other one.',
+      waves: [
+        { name: 'Between the Vats', by: 'Mitz', line: 'The vats block the view along their runs. The barrels come down the runs without vats.',
+          spawns: 'orc:0*2 goblin:1*2 kobold:2*2 orcRaider:4*2 goblin:5*2 brigand:7*2 goblinArcher:8*2 orcRaider:10*2 orc:12*2' },
+        { name: 'Something in the Mash', by: 'Simz', line: 'The mash has gone off, and it has started moving.',
+          spawns: 'gloom:0 orc:1*2 rotGrub:2*2 deepLeech:3*2 brigand:4*2 gloom:6 orcRaider:7*2 goblinArcher:8*2 orc:10*2 gloom:12' },
+        { name: 'Smugglers’ Run', by: 'Mitz', line: 'Smugglers, straight down the runs.',
+          spawns: 'brigand:0*3 brigandArcher:1*2 orcRaider:2*2 wolfRider:4*2 renegadeMage:5 brigand:6*2 orc:7*2 brigandArcher:9*2 orcChampion:11 wolfRider:12*2' },
+        { name: 'Gone Off', by: 'Simz', line: 'A gelatinous cube. It swallows a hero whole, so keep a blade near anyone it gets.',
+          spawns: 'gelCube:0 ogre:1 gloom:2*2 brigand:3*2 giantBeetle:4*2 orc:6*2 hobgoblin:7*2 gloom:9 orcChampion:10 brigandArcher:11*2 gelCube:13 ogre:14' },
+        { name: 'The Cellarman’s Mistake', by: 'Mitz', line: 'Everything that lives in a vat, and the smugglers who were stealing from them.',
+          spawns: 'ogre:0 gelCube:1 orcChampion:2 brigand:3*3 troll:5 renegadeMage:6 gloom:7*2 ogre:8 hobgoblin:9*2 orcChampion:10*2 brigandArcher:11*2 troll:12 wolfRider:13*2 ogre:14' }
+      ] },
+    { id: 'brewhouse', stage: 2, part: 'brewhouse', map: 'brewhouse', name: 'The Brewhouse', gold: 300, by: 'Simz',
+      line: 'Four barrel chutes, two rows of vats, and the biggest mash tun has started to move.',
+      waves: [
+        { name: 'Last Orders', by: 'Simz', line: 'The middle row has no chute. It’s the only safe road through the brewhouse.',
+          spawns: 'goblin:0*2 brigand:2 kobold:3*2 orcRaider:5 goblin:6*2 brigandArcher:8*2 orc:10*2' },
+        { name: 'The Mash Tuns', by: 'Mitz', line: 'Glooms and leeches out of the tuns.',
+          spawns: 'gloom:0 brigand:1*2 deepLeech:2*2 orc:4*2 giantBeetle:5 gloom:7 brigandArcher:8*2 orcRaider:10*2' },
+        { name: 'The Smugglers’ Captain', by: 'Simz', line: 'An orc champion and his whole crew.',
+          spawns: 'orcChampion:0 brigand:1*3 renegadeMage:2 wolfRider:4*2 brigandArcher:5*2 ogre:7 orc:8*2 hobgoblin:10*2' },
+        { name: 'Gone Very Off', by: 'Mitz', line: 'Two cubes. Anyone they swallow is gone if the cube gets out.',
+          spawns: 'gelCube:0 gloom:1*2 orc:3*2 hobgoblin:4*2 gelCube:6 renegadeMage:7 brigandArcher:8*2 ogre:10 orcChampion:12' },
+        { name: 'The Ferment', by: 'Simz', line: 'The biggest mash tun, alive and sliding. Barrels just bounce off it.',
+          spawns: 'theFerment:0 gloom:1*2 brigand:2*2 orcChampion:4 ogre:5 gelCube:7 brigandArcher:8*2 hobgoblin:10*2 orc:11*3' }
+      ] },
+    { id: 'yard', stage: 2, part: 'stables', map: 'yard', name: 'The Stable Yard', gold: 275, by: 'Mitz',
+      line: 'The yard is wide open, and everything in it is fast.',
+      waves: [
+        { name: 'Horse Thieves', by: 'Mitz', line: 'Brigands after the horses, and their dogs.',
+          spawns: 'goblin:0*2 brigand:2*2 warrenHound:4 goblin:5*2 brigand:7*2 warrenHound:9 brigandArcher:11*2' },
+        { name: 'Loose Dogs', by: 'Simz', line: 'Hounds and wolves. They cover the yard in no time.',
+          spawns: 'warrenHound:0*2 goblin:2*2 direWolf:4 warrenHound:6*2 brigand:7*2 direWolf:9 warrenHound:11*2' },
+        { name: 'Riders', by: 'Mitz', line: 'Wolf riders. Knock a rider off and the wolf keeps coming.',
+          spawns: 'wolfRider:0*2 goblinArcher:1*2 brigand:2*2 wolfRider:4*2 direWolf:5*2 brigandArcher:7*2 wolfRider:9*2 orcRaider:10*2' },
+        { name: 'Over the Fence', by: 'Simz', line: 'A cave bear has come over the fence after the oats.',
+          spawns: 'direWolf:0*2 wolfRider:1*2 hobgoblin:3*2 brigand:4*2 caveBear:6 wolfRider:7*2 orc:8*2 direWolf:10*2 brigandArcher:11*2' },
+        { name: 'The Whole Pack', by: 'Mitz', line: 'Every wolf for miles, and the bears behind them.',
+          spawns: 'caveBear:0 wolfRider:1*3 direWolf:2*2 hobgoblin:4*2 orcChampion:5 wolfRider:7*2 caveBear:8 direWolf:9*3 brigandArcher:10*2 orcChampion:12' }
+      ] },
+    { id: 'barn', stage: 2, part: 'stables', map: 'barn', crowds: true, name: 'The Hay Barn', gold: 275, by: 'Simz',
+      line: 'Two ways round the hay barn, and every monster from the middle doors takes the one you’ve left weakest.',
+      waves: [
+        { name: 'Two Ways Round', by: 'Simz', line: 'Wall off one side and they all go the other. Cover both.',
+          spawns: 'goblin:0*2 kobold:2*2 goblin:5*2 warrenHound:7 kobold:9*2 goblin:11*2 warrenHound:13 goblinArcher:14*2' },
+        { name: 'Rats in the Hay', by: 'Mitz', line: 'Beetles and wolves out of the hay.',
+          spawns: 'direRat:0*2 goblin:1*2 warrenHound:2*2 giantBeetle:4 goblin:5*2 direWolf:7*2 goblinArcher:8*2 giantBeetle:10 warrenHound:11*2' },
+        { name: 'Riders Round the Barn', by: 'Simz', line: 'Fast ones. They pick a side and they’re round it before you know.',
+          spawns: 'wolfRider:0*2 brigand:1*2 direWolf:3*2 wolfRider:5*2 brigandArcher:6*2 orcRaider:8*2 wolfRider:10*2 direWolf:12*2 ogre:13 wolfRider:14*2' },
+        { name: 'Bears in the Barn', by: 'Mitz', line: 'Something has been sleeping in the hay.',
+          spawns: 'hobgoblin:0*2 wolfRider:1*2 caveBear:3 orc:4*2 direWolf:6*2 brigand:7*2 wolfRider:9*2 caveBear:11 orcRaider:12*2 troll:13 hobgoblin:14*2' },
+        { name: 'Everything in the Yard', by: 'Simz', line: 'All of it, both ways round.',
+          spawns: 'caveBear:0 wolfRider:1*2 orcChampion:2 direWolf:3*2 hobgoblin:5*2 caveBear:7 wolfRider:8*2 troll:10 orc:11*2 orcChampion:13 ogre:14 caveBear:15 orcChampion:16' }
+      ] },
+    { id: 'stables', stage: 2, part: 'stables', map: 'stables', name: 'The Stables', gold: 300, by: 'Mitz',
+      line: 'The ring round the barn, two more doors, and the yard gate across the top way. Drop it once a battle.',
+      waves: [
+        { name: 'The Yard Gate', by: 'Mitz', line: 'Drop the gate and the top way is shut for a few rounds: everything goes round the bottom.',
+          spawns: 'brigand:0*2 warrenHound:2 goblin:3*2 brigand:5*2 warrenHound:6 goblinArcher:8*2 brigand:10*2 orcRaider:12' },
+        { name: 'Saddled Up', by: 'Simz', line: 'Riders through every door.',
+          spawns: 'wolfRider:0*2 direWolf:1*2 brigand:3*2 wolfRider:5*2 brigandArcher:6*2 direWolf:8*2 orcRaider:9*2 wolfRider:11*2' },
+        { name: 'In Through the Stalls', by: 'Mitz', line: 'Hobgoblins in a line, and bears behind them.',
+          spawns: 'hobgoblin:0*2 orc:1*2 wolfRider:3*2 caveBear:4 brigand:6*2 direWolf:7*2 hobgoblin:9*2 orcRaider:10*2 caveBear:12' },
+        { name: 'Stampede', by: 'Simz', line: 'Wolves in threes, and a troll that won’t stay down.',
+          spawns: 'direWolf:0*3 wolfRider:1*2 caveBear:3 orcRaider:4*2 direWolf:5*3 wolfRider:7*2 troll:9 orc:10*2 wolfRider:12*2' },
+        { name: 'The Pack Leader', by: 'Mitz', line: 'The biggest wolf, and the biggest rider on it.',
+          spawns: 'packLeader:0 wolfRider:1*2 direWolf:2*3 caveBear:4 orcChampion:5 wolfRider:7*2 hobgoblin:8*2 troll:10 direWolf:11*3 orcChampion:13' }
+      ] },
+    { id: 'lawn', stage: 2, part: 'garden', map: 'lawn', crowds: true, name: 'The Beer Garden', gold: 300, by: 'Mitz',
+      line: 'Tables out on the lawn, and something has been digging under it all summer. You can stand on the molehills, until they open.',
+      waves: [
+        { name: 'Last Orders', by: 'Mitz', line: 'Goblins after the leftovers, and rats under the tables.',
+          spawns: 'goblin:0*2 direRat:2*2 kobold:4*2 goblin:6*2 direRat:8*2 goblinArcher:10*2' },
+        { name: 'Molehills', by: 'Simz', line: 'The first molehill opens. Whoever stands on it goes flying.',
+          spawns: 'rotGrub:0*3@1 goblin:1*2 giantBeetle:2 kobold:4*2 rotGrub:5*3@1 goblinArcher:7*2 giantBeetle:8 rotGrub:10*3@1' },
+        { name: 'Under the Tables', by: 'Mitz', line: 'Ankhegs come up through the lawn, right in among you.',
+          spawns: 'ankheg:0@3 goblin:1*2 giantBeetle:2*2 ankheg:4@5 brigand:5*2 rotGrub:6*3@1 hobgoblin:8*2 ankheg:10@3' },
+        { name: 'Night in the Garden', by: 'Simz', line: 'Bats over the hedges, and spiders out of the flower beds.',
+          spawns: 'caveBat:0*3 tombSpider:1*2 hobgoblin:2*2 ankheg:4@1 caveBat:5*3 brigand:6*2 tombSpider:8*2 ankheg:9@5 hobgoblin:10*2' },
+        { name: 'The Whole Lawn Comes Up', by: 'Mitz', line: 'Every molehill and every door.',
+          spawns: 'ankheg:0@1 ankheg:0@5 giantBeetle:1*2 troll:3 ankheg:4@3 orc:5*2 caveBear:7 ankheg:8@1 hobgoblin:9*2 orcChampion:11 ankheg:12@5' }
+      ] },
+    { id: 'pond', stage: 2, part: 'garden', map: 'pond', name: 'The Fish Pond', gold: 300, by: 'Simz',
+      line: 'Frogs and crabs swim straight across the pond. Everything else goes round it, by whichever side you’ve left weaker.',
+      waves: [
+        { name: 'Frogspawn', by: 'Simz', line: 'Giant frogs. The pond is no slower for them.',
+          spawns: 'goblin:0*2 giantFrog:2*2@1 kobold:4*2 giantFrog:6*2@1 goblin:7*2 giantCrab:9*2@1' },
+        { name: 'Crabs', by: 'Mitz', line: 'Crabs straight across, brigands round the sides.',
+          spawns: 'giantCrab:0*3@1 brigand:1*2 giantFrog:3*2@1 brigandArcher:4*2 giantCrab:6*3@1 hobgoblin:7*2 giantFrog:9*2@1 brigand:10*2' },
+        { name: 'The Drowned', by: 'Simz', line: 'Something has been at the bottom of the pond a long time.',
+          spawns: 'drowned:0*2@1 giantCrab:1*2 ghoul:2*2 drowned:4*2@1 giantFrog:5*2 brigand:6*2 drowned:8*2@1 ghoul:9*2' },
+        { name: 'Reeds and Leeches', by: 'Mitz', line: 'Lizardfolk out of the reeds. They go round; the leeches don’t care.',
+          spawns: 'deepLeech:0*3 lizardfolk:1*2 drowned:2*2@1 giantCrab:4*3 lizardfolk:5*2 giantFrog:7*3@1 hobgoblin:8*2 drowned:10*2@1' },
+        { name: 'Something Big in the Pond', by: 'Simz', line: 'Trolls round the sides, and everything that swims straight up the middle.',
+          spawns: 'drowned:0*3@1 troll:1 giantCrab:2*3 lizardfolk:3*2 drowned:5*3@1 ogre:6 giantFrog:7*3@1 orcChampion:9 drowned:10*3@1 troll:12' }
+      ] },
+    { id: 'maze', stage: 2, part: 'garden', map: 'maze', name: 'The Hedge Maze', gold: 300, by: 'Mitz',
+      line: 'Rows of box hedge. Whatever comes through a gap takes the side you’ve left weaker, and bats go straight over the top.',
+      waves: [
+        { name: 'Lost in the Hedges', by: 'Mitz', line: 'Goblins through the gaps in the hedges. Each one takes the side you’ve left weaker.',
+          spawns: 'goblin:0*2 kobold:1*2 goblin:3*2 direRat:4*3 goblinArcher:6*2 kobold:7*2 goblin:9*2' },
+        { name: 'Over the Top', by: 'Simz', line: 'Bats don’t bother with the maze. They fly straight over the hedges.',
+          spawns: 'caveBat:0*2 goblin:1*2 caveBat:4*2 hobgoblin:5*2 caveBat:8*2 goblinArcher:9*2' },
+        { name: 'Every Turn', by: 'Mitz', line: 'Hobgoblins and orcs, and ankhegs coming up in the hedges.',
+          spawns: 'hobgoblin:0*2 orc:1*2 ankheg:3@0 brigand:4*2 orcRaider:5*2 ankheg:7@6 hobgoblin:8*2 gargoyle:10' },
+        { name: 'Under the Hedges', by: 'Simz', line: 'Molehills open at the ends of the hedges, and a troll comes through the gaps.',
+          spawns: 'ankheg:0@0 ankheg:0@6 orc:1*2 caveBat:2*2 troll:4 hobgoblin:5*2 ankheg:7@0 orcChampion:8 caveBat:10*2 brigand:11*2' },
+        { name: 'The Thing Under the Lawn', by: 'Mitz', line: 'Hurt it badly and it dives, and comes up through a molehill further on.',
+          spawns: 'lawnThing:0@3 caveBat:1*2 hobgoblin:2*2 ankheg:4@0 orc:5*2 ankheg:6@6 troll:8 orcChampion:10 caveBat:11*2' }
+      ] },
+    { id: 'wellyard', stage: 2, part: 'well', map: 'wellyard', name: 'The Well Yard', gold: 300, by: 'Mitz',
+      line: 'The old well in the yard. Something has been climbing out of it at night, and it isn’t the cat.',
+      waves: [
+        { name: 'Buckets', by: 'Mitz', line: 'Leeches up the well rope, goblins over the wall.',
+          spawns: 'goblin:0*2 deepLeech:1*2@2 kobold:3*2 goblin:5*2 deepLeech:6*2@2 goblinArcher:8*2 kobold:10*2' },
+        { name: 'Up the Rope', by: 'Simz', line: 'Frogs and crabs out of the well, in the middle of everything.',
+          spawns: 'giantFrog:0*2@2 goblin:1*2 giantCrab:3*2@2 brigand:4*2 giantFrog:6*2@2 goblinArcher:7*2 giantCrab:9*2@2 brigand:10*2' },
+        { name: 'The Drowned', by: 'Mitz', line: 'Whoever fell down the well over the years is climbing back out.',
+          spawns: 'drowned:0*2@2 skeleton:1*2 ghoul:3*2 drowned:4*2@2 skelArcher:6*2 drowned:8*2@2 ghoul:9*2' },
+        { name: 'Something Down There', by: 'Simz', line: 'Bigger things now, and lizardfolk over the wall.',
+          spawns: 'giantCrab:0*3@2 hobgoblin:1*2 drowned:3*2@2 orc:4*2 giantFrog:6*2@2 lizardfolk:7*2 drowned:9*2@2 hobgoblin:10*2' },
+        { name: 'Everything in the Well', by: 'Mitz', line: 'The well and every gate at once.',
+          spawns: 'drowned:0*2@2 troll:1 giantCrab:2*3@2 orcChampion:4 drowned:5*3@2 hobgoblin:6*2 giantFrog:8*3@2 ogre:10 drowned:11*2@2' }
+      ] },
+    { id: 'icehouse', stage: 2, part: 'well', map: 'icehouse', name: 'The Ice House', gold: 300, by: 'Simz',
+      line: 'Ice stacked to the roof and a floor like glass. Nothing stops on the ice, and nobody can stand on it. Fight from the floor beside it.',
+      waves: [
+        { name: 'Slippery', by: 'Simz', line: 'They slide down the ice twice as fast. Hit them from the side as they go past.',
+          spawns: 'kobold:0*2 goblin:2*2 kobold:4*2 warrenHound:6 goblin:8*2 kobold:10*2' },
+        { name: 'On the Ice', by: 'Mitz', line: 'Wolves. Fast enough already.',
+          spawns: 'direWolf:0 goblin:1*2 warrenHound:3*2 direWolf:5 goblinArcher:6*2 warrenHound:8*2 direWolf:10' },
+        { name: 'Ice Thieves', by: 'Simz', line: 'Brigands after the ice, and orcs with them.',
+          spawns: 'brigand:0*2 orcRaider:1*2 brigand:3*2 direWolf:4*2 brigandArcher:6*2 orcRaider:7*2 hobgoblin:9*2' },
+        { name: 'The Cold Store', by: 'Mitz', line: 'Something was being kept cold in here.',
+          spawns: 'skeleton:0*3 wight:2 skeleton:3*3 ghoul:5*2 wight:7 skelArcher:8*2 boneKnight:10' },
+        { name: 'Frozen Solid', by: 'Simz', line: 'A troll that slides, and wolves behind it.',
+          spawns: 'boneKnight:0 direWolf:1*2 troll:3 wolfRider:4*2 hobgoblin:5*2 ogre:7 direWolf:8*3 orcChampion:10 wight:11' }
+      ] },
+    { id: 'well', stage: 2, part: 'well', map: 'well', name: 'The Well', gold: 325, by: 'Mitz',
+      line: 'Down at the bottom of the well something big has woken up. It heals in the water, so catch it on dry floor.',
+      waves: [
+        { name: 'Cold Water', by: 'Mitz', line: 'Leeches and the drowned up the well, goblins through the gates.',
+          spawns: 'goblin:0*2 deepLeech:1*2@2 kobold:3*2 drowned:5@2 goblin:6*2 deepLeech:8*2@2 goblinArcher:9*2' },
+        { name: 'Slipping', by: 'Simz', line: 'Wolves across the ice, frogs out of the well.',
+          spawns: 'direWolf:0 giantFrog:1*2@2 warrenHound:2*2 direWolf:4 giantCrab:5*2@2 goblin:6*3 giantFrog:8*2@2' },
+        { name: 'Up from the Bottom', by: 'Simz', line: 'The drowned, three at a time.',
+          spawns: 'drowned:0*3@2 hobgoblin:1*2 ghoul:2*2 drowned:4*3@2 orcRaider:5*2 wight:6 drowned:8*3@2 hobgoblin:9*2 wight:11' },
+        { name: 'It Stirs', by: 'Mitz', line: 'Whatever is down there is pushing everything else up ahead of it.',
+          spawns: 'giantCrab:0*3@2 troll:1 drowned:2*3@2 orc:3*2 wolfRider:4*2 deepHorror:6@2 giantFrog:7*3@2 orcChampion:9 drowned:10*3@2 troll:12' },
+        { name: 'The Thing in the Well', by: 'Simz', line: 'It heals while it’s in the water. Hold it back until it’s out on the dry floor.',
+          spawns: 'thingInWell:0@2 drowned:1*3@0 hobgoblin:2*2@3 giantCrab:3*3@5 troll:4@1 drowned:6*3@4 orcChampion:7@3 wolfRider:8*2@0 giantFrog:9*3@5 troll:11@4 ogre:12@1' }
+      ] },
+    { id: 'gallery', stage: 2, part: 'attic', map: 'gallery', crowds: true, name: 'The Long Gallery', gold: 250, by: 'Mitz',
+      line: 'A long, narrow attic under the eaves, with two skylights. A long way to walk, so they come in shield walls, and things come in through the roof.',
+      waves: [
+        { name: 'Dust Sheets', by: 'Mitz', line: 'Hobgoblins in a line, and goblins behind their shields. Arrows struggle past a shield wall.',
+          spawns: 'goblin:0*2 direRat:2*2 hobgoblin:4*2 goblin:5*3 goblinArcher:7*3 hobgoblin:8*2 goblin:10*3' },
+        { name: 'Through the Skylight', by: 'Simz', line: 'Bats break in through the skylights. The daylight that follows burns anything undead under it.',
+          spawns: 'caveBat:0*3@0 hobgoblin:1*2 caveBat:2*3@3 orc:3*2 hobgoblin:5*2 caveBat:6*3@0 imp:7*2@3 orcRaider:8*3 hobgoblin:10*2' },
+        { name: 'Old Furniture', by: 'Mitz', line: 'Armour on its stand, a chest nobody remembers, and an ogre who was sleeping up here.',
+          spawns: 'animatedArmour:0*3 hobgoblin:1*2 gargoyle:2@0 mimic:3 ogre:4 gargoyle:5@3 skeleton:6*3 animatedArmour:7*2 hobgoblin:8*3 gargoyle:9@0 ogre:11' },
+        { name: 'Up from Below', by: 'Simz', line: 'The dead come up the attic stairs, and trolls with them. Keep the dead in the light.',
+          spawns: 'ghoul:0*3 wight:1*2 troll:2 gargoyle:3@0 boneKnight:4 wraith:5*2@3 ghoul:6*3 troll:7 wight:8*2 gargoyle:9@3 skelArcher:10*3 boneKnight:12' },
+        { name: 'The Whole Gallery', by: 'Mitz', line: 'Stone things through the roof and everything else along the floor.',
+          spawns: 'gargoyle:0*2@0 troll:1 boneKnight:2*2 gargoyle:3*2@3 mummy:4 ogre:5 hobgoblin:6*3 wraith:7*2@0 troll:8 orcChampion:9 boneKnight:10*2 gargoyle:11@3 mummy:12' }
+      ] },
+    { id: 'rafters', stage: 2, part: 'attic', map: 'rafters', name: 'The Rafters', gold: 300, by: 'Simz',
+      line: 'Up among the beams. A hero on a rafter gets +2 to hit, and the chimney stacks block the view.',
+      waves: [
+        { name: 'In the Rafters', by: 'Simz', line: 'Bats in the beams, goblins on the boards.',
+          spawns: 'goblin:0*2 kobold:2*2 caveBat:4*2 goblin:6*2 kobold:8*2 caveBat:9*2 goblinArcher:11*2' },
+        { name: 'Cobwebs', by: 'Mitz', line: 'Spiders, and bats in through the skylights.',
+          spawns: 'tombSpider:0*2 direRat:1*3 tombSpider:3*2 caveBat:4*2@1 goblin:6*2 tombSpider:8*2 caveBat:9*2@4' },
+        { name: 'Stone on the Roof', by: 'Simz', line: 'Gargoyles in off the roof and down the stairs, and hobgoblins with them.',
+          spawns: 'gargoyle:0 imp:1*2 hobgoblin:2*2 gargoyle:5 orc:6*2 hobgoblin:8*2 orc:10*2' },
+        { name: 'Things Stored Away', by: 'Mitz', line: 'Whatever was put up here and forgotten.',
+          spawns: 'mimic:0 animatedArmour:1*2 wight:3 skeleton:4*3 mummy:6 wraith:7@1 skelArcher:8*2 animatedArmour:10*2' },
+        { name: 'Everything in the Roof', by: 'Simz', line: 'Stone, bone and orcs, and an ogre on the stairs.',
+          spawns: 'gargoyle:0*2@1 wraith:1@4 boneKnight:2 hobgoblin:3*2 mummy:5 ogre:6 gargoyle:8@4 wight:9*2 orcChampion:11' }
+      ] },
+    { id: 'attic', stage: 2, part: 'attic', map: 'attic', name: 'The Attic', gold: 325, by: 'Mitz',
+      line: 'The top of the house, and its oldest lodger. He heals as fast as you can hurt him, unless the daylight finds him.',
+      waves: [
+        { name: 'Footsteps Overhead', by: 'Mitz', line: 'Something has been walking about up here at night.',
+          spawns: 'skeleton:0*2 direRat:1*3 skeleton:3*2 ghoul:5 direRat:6*3 skelArcher:8*2 ghoul:10' },
+        { name: 'Bats in the Belfry', by: 'Simz', line: 'Bats through every skylight. Let them in: the light comes in behind them.',
+          spawns: 'caveBat:0*3@0 skeleton:1*2 caveBat:3*3@7 ghoul:4*2 imp:6*2@3 skeleton:7*2 caveBat:9*2@4' },
+        { name: 'The Lodger’s Guests', by: 'Mitz', line: 'Wights and wraiths, and they don’t like the light either.',
+          spawns: 'wight:0 ghoul:1*2 skeleton:2*3 wraith:4@0 wight:6 ghoul:7*2 skelArcher:8*2 wraith:10@7' },
+        { name: 'Something Woken', by: 'Simz', line: 'A mummy, a bone knight, and a vampire who isn’t the lodger.',
+          spawns: 'mummy:0 wight:1*2 boneKnight:3 wraith:4@3 ghoul:5*3 mummy:7 vampire:9 skeleton:10*3' },
+        { name: 'The Lodger in the Attic', by: 'Mitz', line: 'He heals twenty a turn. Sear him with radiant fire or catch him in the daylight.',
+          spawns: 'lodger:0@5 ghoul:1*2 wight:2*2 wraith:4@4 boneKnight:5 mummy:7 skeleton:8*3 wight:10 gargoyle:11@0' }
+      ] }
+  ];
+  /* Maps. Each string is one row of the mat (a lane), read from the tavern on the left to the dungeon on the right.
+       .  floor
+       #  pillar: nothing can stand there, and it blocks the line of sight along its row
+       ~  water or mud: difficult ground, walkers take twice as long to cross it
+       ^  high ground: a hero standing here gets +2 to hit
+       +  holy ground: undead that start a turn here take 2 radiant damage
+       o  pit: walkers go round, flyers cross; no hero can stand on it
+       D  door: monsters come in here; no hero can stand on it
+       H  hatch: floor until a monster comes up through it, then a door; whoever stands on it is thrown aside
+       *  oven: a wall that flares every few rounds, burning whatever stands on the squares beside it
+       =  ice: walkers slide across it twice as fast; no hero can stand on it
+       G  the yard gate: a way through until it is dropped
+       %  low box hedge: walkers go round, flyers go over, nobody can stand in it; everyone can see over it
+       @  the well: a way in, out in the middle of the floor; nobody can stand on it
+          (space) outside the mat
+     Doors and hatches are numbered together in reading order, row by row. Floors can be bigger than 5 by 10.
+     A floor can also say forks: true (on a split, monsters take the way the heroes cover least), chutes: { lanes }
+     (barrels roll down those rows), oven: { every, first } and gate: { rounds }. */
+  const MAPS = {
+    classic: { name: 'The Cellar Floor', rows: [
+      '.........D',
+      '.........D',
+      '.........D',
+      '.........D',
+      '.........D'] },
+    pillars: { name: 'The Pillared Cellar', rows: [
+      '....#....D',
+      '.......#.D',
+      '.........D',
+      '.......#.D',
+      '....#....D'] },
+    // Simz's plan for the flooded crypt: the side doors are six squares from the tavern, so a Fighter goes in each of them early
+    flooded: { name: 'The Flooded Crypt', plan: [
+      ['bard', 2, 0], ['bard', 1, 0], ['ranger', 2, 1], ['fighter', 0, 5], ['fighter', 4, 5], ['bard', 3, 0], ['ranger', 1, 1], ['ranger', 3, 1], ['ranger', 0, 1],
+      ['ranger', 4, 1], ['fighter', 2, 4], ['fighter', 1, 4], ['fighter', 3, 4], ['wizard', 2, 2], ['bard', 0, 0], ['wizard', 1, 2], ['wizard', 3, 2], ['bard', 4, 0],
+      ['wizard', 0, 2], ['wizard', 4, 2], ['cleric', 1, 3], ['cleric', 3, 3], ['fighter', 0, 4], ['fighter', 4, 4], ['fighter', 2, 5], ['rogue', 1, 5], ['rogue', 3, 5],
+      ['ranger', 2, 3], ['ranger', 0, 3], ['ranger', 4, 3]], rows: [
+      '......D   ',
+      '...~~....D',
+      '...~~+...D',
+      '...~~....D',
+      '......D   '] },
+    // Phase 6: the cellar takes new shapes. Anything outside the mat is a space; the tavern is still the left edge.
+    corner: { name: 'The Corner Store', turns: true, rows: [
+      '.........D',
+      '.........D',
+      '......  ..',
+      '        ..',
+      '        DD'] },
+    horseshoe: { name: 'The Horseshoe', turns: true, rows: [
+      '...     .D',
+      ' ..     ..',
+      ' ..     ..',
+      ' .........',
+      ' .........'] },
+    crossing: { name: 'The Crossing', turns: true, rows: [
+      '      .D  ',
+      '      .   ',
+      '.........D',
+      '.........D',
+      '      .D  '] },
+    bridge: { name: 'The Chasm Bridge', rows: [
+      '...oooo..D',
+      '..^oooo..D',
+      '.........D',
+      '..^oooo..D',
+      '...oooo..D'] },
+    // Phase 7: the rest of the house
+    larder: { name: 'The Larder', rows: [
+      '.........D',
+      '......H..D',
+      '.........D',
+      '....H....D',
+      '.........D'] },
+    // Simz's plan for the scullery: the bards stand in the middle row, safe from the ovens; each oven row is held where its
+    // hot squares end, with a ranger behind the wall and a rogue between the two queues, stabbing both ways
+    scullery: { name: 'The Scullery', turns: true, plan: [
+      ['bard', 3, 0], ['bard', 3, 1], ['fighter', 2, 5], ['fighter', 4, 5], ['ranger', 2, 4], ['ranger', 4, 4], ['bard', 3, 2],
+      ['wizard', 3, 4], ['rogue', 3, 6], ['cleric', 3, 3], ['wizard', 3, 5], ['ranger', 3, 7], ['fighter', 3, 8]], rows: [
+      '      ...D',
+      '****  ... ',
+      '......... ',
+      '......... ',
+      '......... ',
+      '****  ... ',
+      '      ...D'] },
+    // the brewhouse: barrels roll down the chutes, from the far end of the row to the tavern
+    racks: { name: 'The Racks', turns: true, chutes: { lanes: [0, 3, 6], every: 5 }, rows: [
+      ' ........D',
+      ' ........D',
+      ' ..       ',
+      ' .........',
+      ' ........D',
+      '        ..',
+      '..........',
+      '..........'] },
+    vats: { name: 'The Vat Room', chutes: { lanes: [0, 2, 4], every: 8 }, rows: [
+      '.........D',
+      '..#...#..D',
+      '.........D',
+      '....#...#D',
+      '.........D'] },
+    brewhouse: { name: 'The Brewhouse', turns: true, chutes: { lanes: [0, 2, 4, 6], every: 4 }, rows: [
+      '..........D',
+      '.##..##..##',
+      '..........D',
+      '...........',
+      '..........D',
+      '.##..##..##',
+      '..........D'] },
+    // the stables and yard: a wide yard, and the ring round the hay barn, where each monster takes the weaker way round
+    yard: { name: 'The Stable Yard', plan: [ // the doors are on rows 0, 2, 4 and 6: bards on the quiet rows, shooters on the busy ones, wizards between two
+      ['bard', 3, 0], ['bard', 1, 0], ['ranger', 2, 1], ['bard', 5, 0], ['ranger', 4, 1], ['ranger', 0, 1], ['ranger', 6, 1], ['fighter', 2, 4], ['fighter', 4, 4],
+      ['fighter', 0, 4], ['fighter', 6, 4], ['wizard', 3, 2], ['wizard', 1, 2], ['wizard', 5, 2], ['fighter', 2, 5], ['fighter', 4, 5], ['fighter', 0, 5], ['fighter', 6, 5],
+      ['rogue', 3, 4], ['rogue', 1, 4], ['rogue', 5, 4], ['ranger', 2, 3], ['ranger', 4, 3], ['ranger', 0, 3], ['ranger', 6, 3]], rows: [
+      '.........D',
+      '..........',
+      '.........D',
+      '..........',
+      '.........D',
+      '..........',
+      '.........D'] },
+    // Simz's plan for the ring: the same on both ways round, so neither is the weaker; bards in the pocket by the tavern
+    barn: { name: 'The Hay Barn', turns: true, forks: true, plan: [
+      ['bard', 3, 0], ['bard', 2, 0], ['ranger', 1, 1], ['ranger', 5, 1], ['fighter', 1, 4], ['fighter', 5, 4], ['bard', 4, 0],
+      ['ranger', 0, 1], ['ranger', 6, 1], ['fighter', 0, 4], ['fighter', 6, 4], ['wizard', 1, 2], ['wizard', 5, 2], ['cleric', 3, 1],
+      ['rogue', 2, 1], ['rogue', 4, 1], ['wizard', 0, 2], ['wizard', 6, 2], ['ranger', 1, 3], ['ranger', 5, 3]], rows: [
+      '.........D',
+      '..........',
+      '..      ..',
+      '..      DD',
+      '..      ..',
+      '..........',
+      '.........D'] },
+    stables: { name: 'The Stables', turns: true, forks: true, gate: { rounds: 4 }, plan: [
+      ['bard', 3, 0], ['bard', 2, 0], ['ranger', 1, 1], ['ranger', 5, 1], ['fighter', 1, 4], ['fighter', 5, 4], ['bard', 4, 0],
+      ['ranger', 0, 1], ['ranger', 6, 1], ['fighter', 0, 4], ['fighter', 6, 4], ['wizard', 1, 2], ['wizard', 5, 2], ['cleric', 3, 1],
+      ['rogue', 2, 1], ['rogue', 4, 1], ['wizard', 0, 2], ['wizard', 6, 2], ['ranger', 1, 3], ['ranger', 5, 3]], rows: [
+      '.....G...D',
+      '.....G....',
+      '..      ..',
+      '..      DD',
+      '..      ..',
+      '..........',
+      '.........D'] },
+    // the beer garden. % is a low box hedge: walkers go round it, flyers go over, and you can see across it. Its hatches are molehills.
+    // Simz's plan for the lawn: as in the yard, bards on the quiet rows and shooters on the busy ones, with a wall in front
+    // of each bard for when the molehills open
+    lawn: { name: 'The Beer Garden', lawn: true, plan: [
+      ['bard', 3, 0], ['bard', 1, 0], ['ranger', 2, 1], ['bard', 5, 0], ['ranger', 4, 1], ['ranger', 0, 1], ['ranger', 6, 1], ['fighter', 2, 4], ['fighter', 4, 4],
+      ['fighter', 0, 4], ['fighter', 6, 4], ['wizard', 3, 2], ['fighter', 3, 3], ['fighter', 1, 4], ['fighter', 5, 4], ['wizard', 1, 2], ['wizard', 5, 2],
+      ['fighter', 2, 5], ['fighter', 4, 5], ['fighter', 0, 5], ['fighter', 6, 5], ['rogue', 3, 4], ['rogue', 1, 5], ['rogue', 5, 5],
+      ['ranger', 2, 3], ['ranger', 4, 3], ['ranger', 0, 3], ['ranger', 6, 3]], rows: [
+      '.........D',
+      '......H...',
+      '.........D',
+      '.....H....',
+      '.........D',
+      '......H...',
+      '.........D'] },
+    pond: { name: 'The Fish Pond', turns: true, forks: true, rows: [
+      '..........D',
+      '...........',
+      '...~~~~~...',
+      '..~~~~~~~.D',
+      '...~~~~~...',
+      '...........',
+      '..........D'] },
+    // Simz's plan for the maze: bards in the gaps by the tavern, a wizard in each gap covering the lane above and below,
+    // shooters at the tavern end of each lane and walls out where the lanes open, clear of the molehills
+    maze: { name: 'The Hedge Maze', turns: true, forks: true, lawn: true, plan: [
+      ['bard', 3, 0], ['bard', 1, 0], ['ranger', 2, 1], ['ranger', 4, 1], ['bard', 5, 0], ['ranger', 0, 1], ['ranger', 6, 1], ['fighter', 2, 6], ['fighter', 4, 6],
+      ['fighter', 0, 6], ['fighter', 6, 6], ['wizard', 3, 1], ['wizard', 1, 1], ['wizard', 5, 1], ['fighter', 2, 7], ['fighter', 4, 7], ['fighter', 0, 7], ['fighter', 6, 7],
+      ['rogue', 2, 4], ['rogue', 4, 4], ['rogue', 0, 4], ['rogue', 6, 4], ['ranger', 2, 2], ['ranger', 4, 2], ['ranger', 0, 2], ['ranger', 6, 2]], rows: [
+      '.....H.....',
+      '..%%%%%%..D',
+      '...H.......',
+      '..%%%%%%..D',
+      '...H.......',
+      '..%%%%%%..D',
+      '.....H.....'] },
+    // the well and ice house. = is ice (walkers slide across it twice as fast; nobody can stand on it); @ is the well
+    wellyard: { name: 'The Well Yard', rows: [
+      '.........D',
+      '.....~~..D',
+      '.....~@..D',
+      '.....~~..D',
+      '.........D'] },
+    // Simz's plan for the ice house: nobody can stand on the ice, so the Bards sit by the tavern on the banks between the runs,
+    // a Fighter blocks the end of each run, Wizards and Rogues work both runs from the banks, and more Fighters hold the doors
+    icehouse: { name: 'The Ice House', turns: true, plan: [
+      ['bard', 2, 0], ['bard', 4, 0], ['fighter', 3, 1], ['fighter', 1, 1], ['fighter', 5, 1], ['wizard', 2, 1], ['bard', 0, 0], ['wizard', 4, 1], ['bard', 6, 0],
+      ['rogue', 2, 2], ['rogue', 4, 2], ['fighter', 1, 7], ['fighter', 3, 7], ['fighter', 5, 7], ['ranger', 2, 8], ['ranger', 4, 8], ['wizard', 0, 1], ['wizard', 6, 1],
+      ['ranger', 0, 8], ['ranger', 6, 8], ['cleric', 2, 3], ['cleric', 4, 3], ['rogue', 0, 2], ['rogue', 6, 2], ['fighter', 1, 8], ['fighter', 3, 8], ['fighter', 5, 8]], rows: [
+      '..........',
+      '..=====..D',
+      '..........',
+      '..=====..D',
+      '..........',
+      '..=====..D',
+      '..........'] },
+    well: { name: 'The Well', turns: true, forks: true, rows: [
+      '.........D',
+      '...==....D',
+      '...~~~~...',
+      '..~~~@~..D',
+      '...~~~~...',
+      '...==....D',
+      '.........D'] },
+    // the attic and roof. Its hatches are skylights: flyers break in through them, and the daylight that comes in after
+    // burns the undead standing under one or next to it. ^ here are the rafters: a hero up on one gets +2 to hit
+    gallery: { name: 'The Long Gallery', skylights: true, rows: [
+      '...^....H....D',
+      '.............D',
+      '...^....H....D'] },
+    // Simz's plan for the rafters: as in the yard, Bards on the quiet rows and shooters on the four with doors, Wizards between
+    // two rows, and later Rangers up on the rafters behind the Fighters for the +2
+    rafters: { name: 'The Rafters', skylights: true, plan: [
+      ['bard', 3, 0], ['bard', 1, 0], ['ranger', 2, 1], ['bard', 5, 0], ['ranger', 4, 1], ['ranger', 0, 1], ['ranger', 6, 1], ['fighter', 2, 5], ['fighter', 4, 5],
+      ['fighter', 0, 5], ['fighter', 6, 5], ['wizard', 3, 2], ['wizard', 1, 2], ['wizard', 5, 2], ['ranger', 2, 4], ['ranger', 4, 4], ['ranger', 0, 4], ['ranger', 6, 4],
+      ['fighter', 2, 6], ['fighter', 4, 6], ['fighter', 0, 6], ['fighter', 6, 6], ['cleric', 3, 3], ['rogue', 1, 5], ['rogue', 5, 5]], rows: [
+      '....^....D',
+      '.#..H..#..',
+      '....^....D',
+      '.#.....#..',
+      '....^....D',
+      '.#..H..#..',
+      '....^....D'] },
+    attic: { name: 'The Attic', skylights: true, rows: [
+      '.....H.....D',
+      '..^......^.D',
+      '...H....H..D',
+      '..^......^.D',
+      '.....H.....D'] },
+    kitchen: { name: 'The Great Kitchen', rows: [
+      '..*****..D',
+      '.........D',
+      '..........',
+      '....H....D',
+      '..........',
+      '......H..D',
+      '..*****...'] }
+  };
+  // the rest of the house, part by part; a battle with stage: 2 names its part
+  const PARTS = {
+    kitchens: { name: 'The kitchens', line: 'Trapdoors in the larder floor and ovens along the walls. The monsters have found the back way in.' },
+    brewhouse: { name: 'The brewhouse', line: 'Barrels roll down the chutes and bowl over anything in the way, heroes too. A barricade stops them.' },
+    stables: { name: 'The stables and yard', line: 'Wolves and riders in the open yard, and the way round the hay barn, where every monster takes the side you’ve left weakest.' },
+    garden: { name: 'The beer garden', line: 'Every good pub has one. Molehills in the lawn, a fish pond the frogs swim straight across, and a hedge maze the bats fly over.' },
+    well: { name: 'The well and ice house', line: 'An old well in the yard that things climb out of, and an ice house where nothing stops and nobody can stand.' },
+    attic: { name: 'The attic and roof', line: 'The long gallery, the rafters and the attic. Things come in through the skylights, and the daylight after them burns the dead.' }
+  };
+
+  // magic items, won between battles and carried by every hero of the kind they are given to. All from the free 5e rules
+  // (SRD 5.1) except the Gilded Tankard, which is the Cat & Mouse's own. for: the kinds of hero that can carry one ('*' for any).
+  // hit and dmg add to attacks, ac to armour class, save to saving throws, hp a share more hit points, undead more damage to
+  // the undead, income a share more gold; ally: carried by that ally of the hero instead (the Tinker's ballista).
+  const ITEMS = {
+    longsword: { name: '+1 Longsword', for: ['fighter', 'paladin'], hit: 1, dmg: 1, text: '+1 to hit and to damage.' },
+    longbow: { name: '+1 Longbow', for: ['ranger'], hit: 1, dmg: 1, text: '+1 to hit and to damage.' },
+    mace: { name: 'Mace of Disruption', for: ['cleric'], undead: 4, text: '4 more damage to the undead with every hit.' },
+    tankard: { name: 'The Gilded Tankard', original: true, for: ['bard'], income: 0.25, text: 'A quarter more gold from every song.' },
+    wand: { name: 'Wand of the War Mage, +1', for: ['wizard', 'sorcerer', 'warlock'], hit: 1, text: '+1 to hit with spell attacks.' },
+    shield: { name: '+1 Shield', for: ['fighter', 'paladin', 'cleric'], ac: 1, text: '+1 armour class.' },
+    bracers: { name: 'Bracers of Defense', for: ['monk', 'wizard', 'sorcerer'], ac: 2, text: '+2 armour class, for those who wear no armour.' },
+    belt: { name: 'Belt of Hill Giant Strength', for: ['barbarian', 'fighter'], dmg: 3, text: '3 more damage with every blow.' },
+    staff: { name: 'Staff of the Woodlands', for: ['druid'], hit: 2, text: '+2 to hit with spell attacks.' },
+    dagger: { name: '+1 Dagger', for: ['rogue'], hit: 1, dmg: 1, text: '+1 to hit and to damage.' },
+    cloak: { name: 'Cloak of Protection', for: '*', ac: 1, save: 1, text: '+1 armour class and +1 to saving throws.' },
+    amulet: { name: 'Amulet of Health', for: '*', hp: 0.25, text: 'A quarter more hit points.' },
+    ammo: { name: 'Ammunition, +1', for: ['tinker'], ally: 'ballista', hit: 1, dmg: 1, text: 'The Tinker’s ballista shoots +1 bolts: +1 to hit and to damage.' }
+  };
+
+  return { id: 'core', name: 'Under the Cat & Mouse', heroes: HEROES, paths: PATHS, difficulty: DIFFICULTY, monsters: MONSTERS, battles: BATTLES, maps: MAPS, items: ITEMS, throws: THROWS, parts: PARTS };
+})();
