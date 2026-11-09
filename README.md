@@ -49,8 +49,8 @@ The only things fetched from the internet are two Google Fonts. If they can't lo
 The tests need Node 18 or later; they were run on Node 22. Running them from anywhere:
 
 ```sh
-tests/run_gate.sh          # syntax, 233 game tests and 19 minis tests (about a minute)
-tests/run_gate.sh --full   # adds the balance report and a 1,440-game stall hunt (about a minute more)
+bash tests/run_gate.sh          # syntax, 233 game tests and 19 minis tests (about a minute)
+bash tests/run_gate.sh --full   # adds the balance report and a 1,440-game stall hunt (about a minute more)
 ```
 
 You can also run each part on its own:
