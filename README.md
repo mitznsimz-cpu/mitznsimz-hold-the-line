@@ -1,10 +1,10 @@
-# Hold the Line
+# Mitz & Simz: Hold the Line
 
-A Mitz & Simz lane-defence game played with unpainted minis on a battle mat. Monsters come up from under the Cat & Mouse, Mitz and Simz's tavern, and you hold the line with a party of heroes. Every attack is a d20 roll against armour class.
+A lane-defence game for the browser, played with unpainted minis on a battle mat. Monsters come up from under the Cat & Mouse, Mitz and Simz's tavern, and you hold the line with a party of heroes. Every attack is a d20 roll against armour class.
 
 **Play it:** https://mitznsimz-cpu.github.io/mitznsimz-hold-the-line/
 
-Version 1.7.8 is the first beta. It runs in any modern browser on a phone, tablet or desktop, with nothing to install.
+Version 1.7.9 is the first beta. It runs in any modern browser on a phone, tablet or desktop, with nothing to install.
 
 <img src="docs/screenshots/battle.png" alt="A battle in the hedge maze, with Simz playing on Auto" width="640"> <img src="docs/screenshots/tavern-phone.png" alt="The Cat & Mouse on a phone, at the start of a campaign" width="180">
 
@@ -49,8 +49,8 @@ The only things fetched from the internet are two Google Fonts. If they can't lo
 The tests need Node 18 or later; they were run on Node 22. Running them from anywhere:
 
 ```sh
-tests/run_gate.sh          # syntax, 233 game tests and 19 minis tests (about a minute)
-tests/run_gate.sh --full   # adds the balance report and a 1,440-game stall hunt (about a minute more)
+bash tests/run_gate.sh          # syntax, 233 game tests and 19 minis tests (about a minute)
+bash tests/run_gate.sh --full   # adds the balance report and a 1,440-game stall hunt (about a minute more)
 ```
 
 You can also run each part on its own:
@@ -81,6 +81,7 @@ The page loads its scripts in this order:
 | File | What it does |
 |---|---|
 | `index.html` | The page, its styles, and the script tags in load order |
+| `icon.svg`, `icon-32.png`, `icon-180.png` | The browser-tab and home-screen icon |
 | `mitznsimz_minis.js` | The shared minis library (core 2.5.0), with Hold the Line's adapter at the end |
 | `motion.js` | How the minis move, and the effects between them: arrows, spells, hit-stop, particles, the tumbling d20, the cats' paws (1.1.0) |
 | `sound.js` | Sound, all made in the browser; no audio files (1.0.0) |
@@ -103,9 +104,14 @@ The rules come first, and they never touch the page. Given a seed, `sim.js` and 
 
 ## Licence
 
-- The code is under the MIT licence; see [`LICENSE`](LICENSE).
-- Mitz & Simz, the characters, their names and the Cat & Mouse are © MitzNSimz, and the MIT licence doesn't cover them. Nor does it cover the mini figures drawn in `mitznsimz_minis.js`. Mitz & Simz make 3D-printed miniatures and tools for Dungeon Masters: https://mitznsimz.co.uk
+The code is under the MIT licence (see [`LICENSE`](LICENSE)): use it, change it, share it. That doesn't cover the Mitz & Simz characters or their artwork: the miniatures drawn by `mitznsimz_minis.js` and the icon are © MitzNSimz.
 
 This work includes material taken from the System Reference Document 5.1 ("SRD 5.1") by Wizards of the Coast LLC and available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at https://creativecommons.org/licenses/by/4.0/legalcode.
 
 Hold the Line is unofficial and is not endorsed by Wizards of the Coast.
+
+## Credits
+
+Made by Pete at [MitzNSimz](https://mitznsimz.co.uk), Folkestone. Mitz & Simz make 3D-printed miniatures and tools for Dungeon Masters.
+
+Its sister game is [Mitz & Simz: Dungeon Delve](https://mitznsimz-cpu.github.io/mitznsimz-dungeon-delve/), a first-person dungeon crawler that shares the miniatures library and the fight animation.
