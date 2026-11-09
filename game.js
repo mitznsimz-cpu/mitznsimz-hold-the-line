@@ -1169,9 +1169,11 @@
   function draw(now) {
     const c = L.cell;
     V.now = now;
+    prof.mark('wait'); // anything the browser was still doing from before: the last frame, say
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
     ctx.clearRect(0, 0, L.W, L.H);
     ctx.drawImage(img(boardCache), 0, 0, L.W, L.H);
+    prof.mark('mat');
     if (V.fallen && V.fallen.length) {
       if (SET.paws && !calm()) sweepFallen(now);
       else { for (const f of V.fallen) { f.sp.anims.push({ k: 'fade', t0: now, dur: 0.5, persist: true }); f.sp.removeAt = now + 0.5; } V.fallen = []; } // paws switched off: they fade as before
@@ -1185,11 +1187,13 @@
     drawGround(now);
     if (L.map.hatches || L.map.oven || L.map.chutes || L.map.gate) drawFloorState(now);
     if (S.traps && S.traps.length) drawTraps();
+    prof.mark('floor');
     drawRoutes(now);
+    prof.mark('routes');
     drawTavernHits(now);
     drawPlacement();
     drawBadSquares(now);
-    prof.mark('board');
+    prof.mark('marks');
 
     live.clear(); for (const u of S.units) if (u.alive) live.set(u.id, u);
     if (HTL.battle(S).crowds) stackSprites();
@@ -1232,7 +1236,16 @@
     }
     const u = st.sp.kind === 'hero' || st.sp.kind === 'monster' ? live.get(st.sp.id) : null;
     if (u && !st.sp.dead) { // slowed and poisoned show as rings round the base
-      const ring = (col, r, dash) => { ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, c * 0.03); ctx.setLineDash(dash); ctx.beginPath(); ctx.ellipse(st.gx, st.gy + c * 0.02, c * st.sp.rx * r, c * st.sp.rx * r * 0.38, 0, 0, TAU); ctx.stroke(); ctx.setLineDash([]); };
+      const ring = (col, r, dash) => {
+        ctx.strokeStyle = col; ctx.lineWidth = Math.max(1.5, c * 0.03); ctx.beginPath();
+        const rx = c * st.sp.rx * r, ry = rx * 0.38, cy = st.gy + c * 0.02;
+        if (!dash.length) ctx.ellipse(st.gx, cy, rx, ry, 0, 0, TAU);
+        else { // dashes by hand, as for the routes
+          const n = Math.max(4, Math.round(Math.PI * (rx + ry) / (dash[0] + dash[1]))), on = TAU / n * dash[0] / (dash[0] + dash[1]);
+          for (let k = 0; k < n; k++) { const a0 = k * TAU / n; ctx.moveTo(st.gx + rx * Math.cos(a0), cy + ry * Math.sin(a0)); ctx.ellipse(st.gx, cy, rx, ry, 0, a0, a0 + on); }
+        }
+        ctx.stroke();
+      };
       if (HTL.hasStatus(u, 'poisoned')) ring('rgba(159,214,140,.8)', 1.18, []);
       if (HTL.hasStatus(u, 'slowed')) ring('rgba(201,194,232,.8)', 1.42, [c * 0.06, c * 0.05]);
     }
@@ -1476,6 +1489,25 @@
       ctx.fillStyle = g; ctx.fillRect(p.x - c / 2, p.y - c / 2, c, c);
     }
   }
+  // A dashed line drawn by hand, as short strokes in one path. Safari's own dashes are very slow (it turns every dash
+  // into a shape of its own), and the routes' dashes move every frame. offset works like lineDashOffset.
+  function strokeDashed(pts, on, off, offset) {
+    if (pts.length < 2) return;
+    const period = on + off, seg = []; let total = 0;
+    for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y); seg.push(l); total += l; }
+    let i = 0, base = 0; // walks forward along the path as the dashes do
+    const at = d => {
+      while (i < seg.length - 1 && d > base + seg[i]) { base += seg[i]; i++; }
+      const t = seg[i] ? Math.min(1, Math.max(0, (d - base) / seg[i])) : 0, a = pts[i], b = pts[i + 1];
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    };
+    ctx.beginPath();
+    for (let st = -(((offset % period) + period) % period); st < total; st += period) {
+      const a = Math.max(0, st), b = Math.min(total, st + on); if (b <= a) continue;
+      const p = at(a), q = at(b); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y);
+    }
+    ctx.stroke();
+  }
   // between waves: the doors the next wave will use, and the way it will come
   function drawRoutes(now) {
     if (!started || S.phase !== 'running') return;
@@ -1509,10 +1541,7 @@
       const a = go(o => o[0]), b = go(o => o[o.length - 1]);
       return a.map(q => q.x + ',' + q.y).join() === b.map(q => q.x + ',' + q.y).join() ? [a] : [a, b];
     };
-    const stroke = (pts, col, dash) => {
-      ctx.strokeStyle = col; ctx.setLineDash(dash); ctx.lineDashOffset = -now * c * 0.5;
-      ctx.beginPath(); pts.forEach((pt, i) => i ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)); ctx.stroke();
-    };
+    const stroke = (pts, col, dash) => { ctx.strokeStyle = col; strokeDashed(pts, dash[0], dash[1], -now * c * 0.5); };
     ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     for (const i of pv.doors) {
       const d = m.doors[i], r = sqRect(d.lane, d.sq);
@@ -1523,7 +1552,7 @@
         const fly = route(src.nextFly, d);
         if (fly.map(q => q.x + ',' + q.y).join() !== walk.map(q => q.x + ',' + q.y).join()) { ctx.lineWidth = Math.max(1.5, c * 0.03); stroke(fly, 'rgba(232,222,204,.45)', [c * 0.12, c * 0.12]); }
       }
-      ctx.setLineDash([]); ctx.lineWidth = Math.max(2, c * 0.045);
+      ctx.lineWidth = Math.max(2, c * 0.045);
       ctx.strokeStyle = 'rgba(201,53,62,' + (0.45 + 0.45 * pulse).toFixed(3) + ')';
       ctx.strokeRect(r.x + 3, r.y + 3, r.w - 6, r.h - 6);
     }
@@ -2705,7 +2734,7 @@
   // Frame timings (Settings): how many frames a second, and how long each part of a frame takes, averaged over half a
   // second and shown in a corner, so a tester can say where a slow browser spends its time.
   const prof = (() => {
-    const parts = ['sim', 'board', 'shadows', 'minis', 'effects', 'panels'], sum = {}, el = () => $('perf');
+    const parts = ['sim', 'wait', 'mat', 'floor', 'routes', 'marks', 'shadows', 'minis', 'effects', 'panels'], sum = {}, el = () => $('perf');
     let t = 0, frames = 0, from = 0, lastFrame = 0, gaps = 0;
     parts.forEach(p => { sum[p] = 0; });
     return {
@@ -2737,9 +2766,9 @@
   function keepPace(ts) {
     if (pace.off) return;
     const gap = pace.last ? ts - pace.last : 0; pace.last = ts;
-    if (gap > 0 && gap < 1000) pace.gaps.push(gap); // a longer gap is the tab waking up, not the drawing
+    if (gap > 0 && gap < 5000) pace.gaps.push(gap); // a longer gap is the tab waking up, not the drawing
     if (!pace.from) pace.from = ts;
-    if (pace.gaps.length < 12 || ts - pace.from < 2000) return; // judge every two seconds of battle
+    if (pace.gaps.length < 3 || ts - pace.from < 2000) return; // judge every two seconds of battle (and at least 3 frames)
     pace.from = ts;
     const sorted = pace.gaps.sort((a, b) => a - b), median = sorted[sorted.length >> 1]; pace.gaps = [];
     if (pace.tried) { // did the last step help?
