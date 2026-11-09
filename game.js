@@ -34,7 +34,7 @@
   const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
     barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
   const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-  const VERSION = '1.7.10'; // shown in the credits, so testers can say which version they were playing
+  const VERSION = '1.7.11'; // shown in the credits, so testers can say which version they were playing
   const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
   const cv = $('board'), ctx = cv.getContext('2d');
@@ -42,6 +42,7 @@
 
   let S = null, acc = 0, speed = 1, diceOn = true, paused = false, started = false, autoOn = false, lastAutoRound = -1;
   let selected = null, hover = null, lastTs = 0;
+  let coveredAt = 0, coveredFor = null; // when a menu last covered the board, and what was drawn under it
   const WON_KEY = 'mitzsimz.holdTheLine.won';
   function loadWon() { try { const v = JSON.parse(localStorage.getItem(WON_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
   let L = null, boardCache = null, V = null;
@@ -93,6 +94,7 @@
     buildBoard();
     buildSprites();
     PILLAR = renderPillar(L.cell * L.dpr);
+    coveredFor = null; // redraw the board, even under a menu
   }
   function gpos(lane, sq) {
     const c = L.cell;
@@ -2669,15 +2671,22 @@
       if (autoOn && !S.free && S.purse == null && S.phase === 'running' && S.round !== lastAutoRound) { lastAutoRound = S.round; HTL.autoplay(S); }
     }
     if (S.events.length) { const evs = S.events.splice(0); for (const ev of evs) onEvent(ev); }
-    const now = clock();
-    runImpacts(now);
-    draw(now);
-    drawTrack(now);
-    hud();
-    drawCooldowns(now);
-    updateCard();
-    updateNext();
-    updatePowers(); updateBelt();
+    // Under a menu the board is still: let what's moving settle for a moment, then stop redrawing it until the menu
+    // closes, the battle changes or the window is resized. Redrawing a full-window board behind every menu made them slow.
+    const covered = !$('overlay').hidden, key = covered && S && L ? S : null;
+    if (!covered) coveredFor = null;
+    else if (coveredFor !== key || coveredFor === null) { coveredFor = key; coveredAt = ts; }
+    if (!covered || ts - coveredAt < 1500) {
+      const now = clock();
+      runImpacts(now);
+      draw(now);
+      drawTrack(now);
+      hud();
+      drawCooldowns(now);
+      updateCard();
+      updateNext();
+      updatePowers(); updateBelt();
+    }
     requestAnimationFrame(frame);
   }
 

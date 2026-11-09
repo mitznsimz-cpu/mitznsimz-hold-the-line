@@ -2036,6 +2036,15 @@ test('support and links follow the shared standard: the exact Ko-fi words, .co.u
   assert.ok(/won && !mode && !next \? '<p class="support-line">' \+ KOFI_LINE/.test(g), 'the end screen carries it only when a whole campaign is won');
 });
 
+test('menus stay quick on a big screen: no backdrop blur, and the board stops redrawing under a menu', () => {
+  const g = read('game.js'), page = read('index.html');
+  assert.ok(!/backdrop-filter/.test(page), 'no backdrop-filter: blurring a full-window board every frame made every menu slow');
+  assert.ok(/if \(!covered \|\| ts - coveredAt < 1500\) \{\s*const now = clock\(\);\s*runImpacts\(now\);\s*draw\(now\);/.test(g), 'under a menu, the board settles for a moment and then stops redrawing');
+  assert.ok(/coveredFor = null; \/\/ redraw the board, even under a menu/.test(g), 'a resize redraws the board once, even under a menu');
+  // the battle never runs under a menu: Settings opens only from the tavern or the pause screen
+  assert.ok(!/showSettings\((?!\(\) => showTavern|showPause)/.test(g.replace(/function showSettings\(/, '')), 'Settings opens only from the tavern or the pause screen');
+});
+
 console.log('\n' + table.map(r => '       ' + r).join('\n'));
 for (const dk of ['easy', 'medium', 'hard', 'deadly']) if (tally[dk])
   console.log('       ' + dk.padEnd(7) + ' Simz ' + tally[dk].simz + '/' + tally[dk].n + '  slow ' + tally[dk].slow + '/' + tally[dk].n);

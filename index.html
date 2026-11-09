@@ -92,7 +92,8 @@ button:focus-visible{outline:2px solid var(--gold-hi);outline-offset:2px}
 .overlay{
   position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;overflow:auto;
   padding:calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
-  background:rgba(14,9,7,.7);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+  /* no backdrop blur: on a big screen, blurring a full-window board every frame made every menu slow to answer */
+  background:rgba(14,9,7,.8);
 }
 .panel{
   width:100%;max-width:440px;margin:auto;padding:22px 22px 20px;border-radius:10px;background:var(--panel);
