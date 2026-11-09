@@ -2019,6 +2019,23 @@ test('varied parties: with a Bard, very different sixes still win on Hard, and b
   table.push('varied   Simz ' + won + '/' + n + ' on Hard, six different parties');
 });
 
+test('support and links follow the shared standard: the exact Ko-fi words, .co.uk, new tabs, never in a battle', () => {
+  const g = read('game.js'), page = read('index.html');
+  assert.ok(g.includes("'☕ Enjoying it? Buy Pete some dice, or Mitz &amp; Simz some treats.'"), 'the Ko-fi words, exactly');
+  assert.ok(g.includes("kofi: 'https://ko-fi.com/mitznsimz'") && g.includes("site: 'https://mitznsimz.co.uk'"), 'the Ko-fi and website links');
+  assert.ok(g.includes("'🛡 MitzNSimz.co.uk'") && g.includes('3D-printed miniatures and tools for Dungeon Masters'), 'the website words');
+  for (const u of ['mitznsimz-dungeon-delve/', 'mitznsimz-tarokk/', 'DnD-Encounter-Tracker/', 'mailto:mitznsimz@gmail.com'])
+    assert.ok(g.includes(u), 'the credits link ' + u);
+  assert.ok(g.includes("repo: 'https://github.com/mitznsimz-cpu/mitznsimz-hold-the-line'") && g.includes("ext(LINKS.repo + '/issues', 'GitHub')"), 'bugs go to the game\'s GitHub repository');
+  assert.ok(/No ads and no tracking/.test(g), 'the no-ads, no-tracking line');
+  assert.ok(!/mitznsimz\.com/i.test(g + page), 'always .co.uk, never .com');
+  assert.ok(!/utm_|[?&]ref=/i.test(g + page), 'no tracking tags on links');
+  const blank = (g + page).match(/target="_blank"[^>]*>/g) || [];
+  assert.ok(blank.every(t => t.includes('rel="noopener noreferrer"')), 'every new-tab link has rel="noopener noreferrer": ' + blank.filter(t => !t.includes('noreferrer')).join(' '));
+  assert.ok(/from === 'pause' \? '' : '<p class="support-line">'/.test(g), 'the front-screen line is left out when the tavern is opened from a paused battle');
+  assert.ok(/won && !mode && !next \? '<p class="support-line">' \+ KOFI_LINE/.test(g), 'the end screen carries it only when a whole campaign is won');
+});
+
 console.log('\n' + table.map(r => '       ' + r).join('\n'));
 for (const dk of ['easy', 'medium', 'hard', 'deadly']) if (tally[dk])
   console.log('       ' + dk.padEnd(7) + ' Simz ' + tally[dk].simz + '/' + tally[dk].n + '  slow ' + tally[dk].slow + '/' + tally[dk].n);

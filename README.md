@@ -4,7 +4,7 @@ A lane-defence game for the browser, played with unpainted minis on a battle mat
 
 **Play it:** https://mitznsimz-cpu.github.io/mitznsimz-hold-the-line/
 
-Version 1.7.9 is the first beta. It runs in any modern browser on a phone, tablet or desktop, with nothing to install.
+It is in beta: the version number is on the Credits screen. It runs in any modern browser on a phone, tablet or desktop, with nothing to install.
 
 <img src="docs/screenshots/battle.png" alt="A battle in the hedge maze, with Simz playing on Auto" width="640"> <img src="docs/screenshots/tavern-phone.png" alt="The Cat & Mouse on a phone, at the start of a campaign" width="180">
 
@@ -112,6 +112,10 @@ Hold the Line is unofficial and is not endorsed by Wizards of the Coast.
 
 ## Credits
 
-Made by Pete at [MitzNSimz](https://mitznsimz.co.uk), Folkestone. Mitz & Simz make 3D-printed miniatures and tools for Dungeon Masters.
+Made by Pete at [MitzNSimz](https://mitznsimz.co.uk), Folkestone.
 
-Its sister game is [Mitz & Simz: Dungeon Delve](https://mitznsimz-cpu.github.io/mitznsimz-dungeon-delve/), a first-person dungeon crawler that shares the miniatures library and the fight animation.
+- ☕ [Enjoying it? Buy Pete some dice, or Mitz & Simz some treats.](https://ko-fi.com/mitznsimz)
+- 🛡 [MitzNSimz.co.uk](https://mitznsimz.co.uk): 3D-printed miniatures and tools for Dungeon Masters.
+- More from Mitz & Simz: [Dungeon Delve](https://mitznsimz-cpu.github.io/mitznsimz-dungeon-delve/) (a first-person dungeon crawler that shares the miniatures library and the fight animation), [Tarokk](https://mitznsimz-cpu.github.io/mitznsimz-tarokk/) and the [D&D Encounter Tracker](https://mitznsimz-cpu.github.io/DnD-Encounter-Tracker/).
+
+No ads and no tracking: your progress stays in your browser.

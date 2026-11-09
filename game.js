@@ -34,7 +34,7 @@
   const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
     barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
   const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-  const VERSION = '1.7.9'; // shown in the credits, so testers can say which version they were playing
+  const VERSION = '1.7.10'; // shown in the credits, so testers can say which version they were playing
   const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
   const cv = $('board'), ctx = cv.getContext('2d');
@@ -1779,7 +1779,8 @@
         (r.open ? '<em>' + status[r.id] + '</em>' : '') + '</button>').join('') + '</div>' +
       '<h3 class="pick">Tonight’s regulars</h3><div class="regulars" aria-label="' + CAMP.roster(camp).map(t => PACK.heroes[t].name).join(', ') + '"><canvas aria-hidden="true"></canvas></div>' +
       '<div class="btnrow">' + (from === 'pause' ? '<button class="secondary" id="btnBack" type="button">Back</button>' : '') +
-      '<button class="secondary" id="btnSettings" type="button">Settings</button><button class="secondary" id="btnCredits" type="button">Credits</button></div></div>';
+      '<button class="secondary" id="btnSettings" type="button">Settings</button><button class="secondary" id="btnCredits" type="button">Credits</button></div>' +
+      (from === 'pause' ? '' : '<p class="support-line">' + KOFI_LINE + ' <span aria-hidden="true">·</span> ' + SITE_LINK + '</p>') + '</div>';
     o.hidden = false;
     o.querySelectorAll('.room').forEach(btn => btn.addEventListener('click', () => {
       const r = btn.dataset.room;
@@ -2341,22 +2342,30 @@
     $('btnBack').focus();
   }
 
+  /* Support and links: Pete's standard for every Mitz & Simz game (the roadmap's "Support and links"). Same words everywhere,
+     on the credits, one quiet line on the tavern's front screen and the end of a campaign, and never during a battle. */
+  const LINKS = { kofi: 'https://ko-fi.com/mitznsimz', site: 'https://mitznsimz.co.uk', repo: 'https://github.com/mitznsimz-cpu/mitznsimz-hold-the-line',
+    delve: 'https://mitznsimz-cpu.github.io/mitznsimz-dungeon-delve/', tarokk: 'https://mitznsimz-cpu.github.io/mitznsimz-tarokk/',
+    tracker: 'https://mitznsimz-cpu.github.io/DnD-Encounter-Tracker/' };
+  const ext = (href, text) => '<a href="' + href + '" target="_blank" rel="noopener noreferrer">' + text + '</a>';
+  const KOFI_LINE = ext(LINKS.kofi, '☕ Enjoying it? Buy Pete some dice, or Mitz &amp; Simz some treats.');
+  const SITE_LINK = ext(LINKS.site, '🛡 MitzNSimz.co.uk');
   function showCredits(from) {
     const o = $('overlay');
     o.innerHTML = '<div class="panel credits" role="dialog" aria-labelledby="ovTitle"><span class="eyebrow">Mitz &amp; Simz present</span><h2 id="ovTitle">Credits</h2>' +
-      '<p><strong>Mitz &amp; Simz: Hold the Line</strong>, version ' + VERSION + '. Made by Pete at ' +
-      '<a href="https://mitznsimz.co.uk" target="_blank" rel="noopener">MitzNSimz</a>, Folkestone.</p>' +
-      '<p>Found a bug, or had an idea? Tell us on <a href="https://github.com/mitznsimz-cpu/mitznsimz-hold-the-line/issues" target="_blank" rel="noopener">GitHub</a> ' +
-      'or at <a href="mailto:mitznsimz@gmail.com">mitznsimz@gmail.com</a>, and say which version you were playing.</p>' +
+      '<p><strong>Mitz &amp; Simz: Hold the Line</strong>, version ' + VERSION + '. Made by Pete at ' + ext(LINKS.site, 'MitzNSimz') + ', Folkestone.</p>' +
+      '<p class="support">' + KOFI_LINE + '</p>' +
+      '<p>' + SITE_LINK + ': 3D-printed miniatures and tools for Dungeon Masters.</p>' +
+      '<p>More from Mitz &amp; Simz: ' + ext(LINKS.delve, 'Dungeon Delve') + ', ' + ext(LINKS.tarokk, 'Tarokk') + ' and the ' + ext(LINKS.tracker, 'D&amp;D Encounter Tracker') + '.</p>' +
+      '<p>Found a bug, or had an idea? Tell us on ' + ext(LINKS.repo + '/issues', 'GitHub') + ' or at <a href="mailto:mitznsimz@gmail.com">mitznsimz@gmail.com</a>, and say which version you were playing.</p>' +
+      '<p>No ads and no tracking. Your progress is saved in this browser and never leaves it.</p>' +
       '<p>The minis are drawn in code, unpainted, the way they come off the printer. Mitz and Simz supervised.</p>' +
-      '<p>Mitz &amp; Simz make 3D-printed miniatures and tools for Dungeon Masters: <a href="https://mitznsimz.co.uk" target="_blank" rel="noopener">mitznsimz.co.uk</a>. ' +
-      'Also from Mitz &amp; Simz: <a href="https://mitznsimz-cpu.github.io/mitznsimz-dungeon-delve/" target="_blank" rel="noopener">Dungeon Delve</a>, a first-person dungeon crawler.</p>' +
-      '<p class="legal">The code is under the MIT licence, on <a href="https://github.com/mitznsimz-cpu/mitznsimz-hold-the-line" target="_blank" rel="noopener">GitHub</a>. ' +
+      '<p class="legal">The code is under the MIT licence, on ' + ext(LINKS.repo, 'GitHub') + '. ' +
       'It doesn’t cover Mitz &amp; Simz, their characters, the miniature artwork or the icon, which are © MitzNSimz.</p>' +
       '<p class="legal">This work includes material taken from the System Reference Document 5.1 (“SRD 5.1”) by Wizards of the Coast LLC and available at ' +
-      '<a href="https://dnd.wizards.com/resources/systems-reference-document" target="_blank" rel="noopener">https://dnd.wizards.com/resources/systems-reference-document</a>. ' +
+      ext('https://dnd.wizards.com/resources/systems-reference-document', 'https://dnd.wizards.com/resources/systems-reference-document') + '. ' +
       'The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License available at ' +
-      '<a href="https://creativecommons.org/licenses/by/4.0/legalcode" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/legalcode</a>.</p>' +
+      ext('https://creativecommons.org/licenses/by/4.0/legalcode', 'https://creativecommons.org/licenses/by/4.0/legalcode') + '.</p>' +
       '<div class="btnrow"><button class="primary" id="btnBack" type="button">Back</button></div></div>';
     o.hidden = false;
     $('btnBack').addEventListener('click', () => showTavern(from));
@@ -2429,7 +2438,8 @@
       '<div><span class="lbl">Monsters slain</span><b>' + st.kills + '</b></div>') +
       (mode === 'reverse' ? '' : '<div><span class="lbl">Natural 20s</span><b>' + st.crits + '</b></div>' +
       '<div><span class="lbl">Got through the door</span><b>' + st.leaks + '</b></div>') +
-      '</div>' + (gains.length ? '<ul class="gains">' + gains.join('') + '</ul>' : '') + '<div class="btnrow">' + buttons + '</div></div>';
+      '</div>' + (gains.length ? '<ul class="gains">' + gains.join('') + '</ul>' : '') + '<div class="btnrow">' + buttons + '</div>' +
+      (won && !mode && !next ? '<p class="support-line">' + KOFI_LINE + '</p>' : '') + '</div>';
     o.hidden = false;
     if ($('btnNext')) $('btnNext').addEventListener('click', () => (nextPuzzle ? showPuzzle(nextPuzzle, 'end') : showParty(next.id, 'end')));
     if ($('btnAgain')) $('btnAgain').addEventListener('click', () => newGame(mode === 'endless' ? MODES.endlessId(newSeed()) : b.id, true, Object.assign({}, lastOpts, CAMP.battleOptions(camp))));
