@@ -2044,7 +2044,12 @@ test('quick on a big screen: no backdrop blur, the board rests under a menu, min
   assert.ok(!/SPR\[st\.sp\.type\]|SPR\[selected\]|SPR\.__bear/.test(g), 'nothing reads a sprite without going through spr()');
   assert.ok(/const BOARD_PIXELS = 4\.2e6;/.test(g) && /Math\.sqrt\(boardBudget\(\) \/ \(W \* H\)\)/.test(g), 'the board keeps to its pixel budget');
   const kp = g.slice(g.indexOf('function keepPace(ts)'), g.indexOf('function frame(ts)'));
-  assert.ok(/median <= 24 \|\| L\.dpr <= 1\.01/.test(kp) && /cv\.width \* cv\.height \* 0\.64/.test(kp) && /saveSettings\(\)/.test(kp), 'slow frames in a battle soften the board a step, never below 1x, and it is remembered');
+  assert.ok(/median <= 24 \|\| L\.dpr <= 1\.01/.test(kp) && /cv\.width \* cv\.height \* f\)/.test(kp) && /median > 50 \? 0\.4 : 0\.64/.test(kp) && /saveSettings\(\)/.test(kp), 'slow frames in a battle soften the board a step (a bigger one when very slow), never below 1x, and it is remembered');
+  assert.ok(/ts - pace\.from < 2000/.test(kp) && /gap < 1000/.test(kp), 'judged every two seconds of battle, so a very slow browser adapts quickly');
+  assert.ok(/const dt = Math\.min\(0\.25,/.test(g), 'a slow browser still plays at the right speed: up to a quarter of a second of game time a frame');
+  assert.ok(/if \(st\.sp\.stone\) ctx\.filter = 'none';/.test(g) && !/^\s*ctx\.filter = 'none';/m.test(g), 'only a mini turned to stone touches the canvas filter');
+  assert.ok(/function warmSprites\(\)/.test(g) && /warmSprites\(\);\n  \}/.test(g), "this battle's minis are drawn when the board is laid out, not mid-fight");
+  assert.ok(/\['perf', 'Frame timings',/.test(g) && /#perf\{/.test(page), 'Frame timings can be switched on in Settings');
   assert.ok(/median > t\.median \* 0\.95\) \{ pace\.off = true; SET\.boardPx = t\.budget/.test(kp), 'a step that does not help is undone');
   assert.ok(/if \(!covered && started && !paused && S\.phase === 'running'\) keepPace\(ts\)/.test(g), 'only battle frames are timed');
   assert.ok(!/backdrop-filter/.test(page), 'no backdrop-filter: blurring a full-window board every frame made every menu slow');
