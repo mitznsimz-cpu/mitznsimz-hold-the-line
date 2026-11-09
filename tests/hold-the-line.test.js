@@ -2036,8 +2036,13 @@ test('support and links follow the shared standard: the exact Ko-fi words, .co.u
   assert.ok(/won && !mode && !next \? '<p class="support-line">' \+ KOFI_LINE/.test(g), 'the end screen carries it only when a whole campaign is won');
 });
 
-test('menus stay quick on a big screen: no backdrop blur, and the board stops redrawing under a menu', () => {
+test('quick on a big screen: no backdrop blur, the board rests under a menu, minis drawn when needed, and a pixel budget', () => {
   const g = read('game.js'), page = read('index.html');
+  const build = g.slice(g.indexOf('function buildSprites()'), g.indexOf('function spr(type)'));
+  assert.ok(build && !/TableMinis\.sprite\(/.test(build), 'buildSprites no longer draws every mini up front');
+  assert.ok(/function spr\(type\) \{\s*return SPR\[type\] \|\|/.test(g) && /function sprW\(type\) \{ return SPRW\[type\] \|\|/.test(g), 'a mini is drawn the first time it is needed');
+  assert.ok(!/SPR\[st\.sp\.type\]|SPR\[selected\]|SPR\.__bear/.test(g), 'nothing reads a sprite without going through spr()');
+  assert.ok(/const BOARD_PIXELS = 4\.2e6;/.test(g) && /Math\.sqrt\(BOARD_PIXELS \/ \(W \* H\)\)/.test(g), 'the board keeps to its pixel budget');
   assert.ok(!/backdrop-filter/.test(page), 'no backdrop-filter: blurring a full-window board every frame made every menu slow');
   assert.ok(/if \(!covered \|\| ts - coveredAt < 1500\) \{\s*const now = clock\(\);\s*runImpacts\(now\);\s*draw\(now\);/.test(g), 'under a menu, the board settles for a moment and then stops redrawing');
   assert.ok(/coveredFor = null; \/\/ redraw the board, even under a menu/.test(g), 'a resize redraws the board once, even under a menu');

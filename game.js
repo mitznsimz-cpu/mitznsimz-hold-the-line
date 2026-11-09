@@ -42,6 +42,7 @@
 
   let S = null, acc = 0, speed = 1, diceOn = true, paused = false, started = false, autoOn = false, lastAutoRound = -1;
   let selected = null, hover = null, lastTs = 0;
+  const BOARD_PIXELS = 4.2e6;
   let coveredAt = 0, coveredFor = null; // when a menu last covered the board, and what was drawn under it
   const WON_KEY = 'mitzsimz.holdTheLine.won';
   function loadWon() { try { const v = JSON.parse(localStorage.getItem(WON_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
@@ -71,7 +72,8 @@
   function layout() {
     const wrap = $('boardWrap');
     const W = Math.max(1, wrap.clientWidth), H = Math.max(1, wrap.clientHeight);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+    // the board's pixels have a budget: past about four million, a big screen gains little sharpness and every frame pays
+    const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2.5, Math.sqrt(BOARD_PIXELS / (W * H))));
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     const M = currentMap(), MW = M.w, MH = M.h; // squares along a row, and rows
     const horiz = W > H * 1.15;
@@ -465,16 +467,20 @@
   const tipOf = ch => (ch === 'H' && L.map.lawn ? MOLEHILL : ch === 'H' && L.map.skylights ? SKYLIGHT : ch === '^' && L.map.skylights ? RAFTER : TERRAIN[ch]);
 
   /* ---------- minis come from the shared library, through Hold the Line’s TableMinis adapter ---------- */
+  // Minis are drawn into sprites at the board's size when first needed, not all 80-odd at once: on a big screen the
+  // full set came to hundreds of megabytes of canvas, which a browser can be slow to juggle.
+  let SPRU = 0;
   function buildSprites() {
     TableMinis.clearCache(); SPRS.clear(); SPRP.clear(); SPRL.clear();
+    for (const k in SPR) delete SPR[k];
+    for (const k in SPRW) delete SPRW[k];
     for (const t of Object.keys(PACK.heroes)) if (facesLeft(t)) SPRL.add(t);
-    const u = L.cell * L.dpr;
-    for (const type of Object.keys(PACK.heroes).concat(Object.keys(PACK.monsters))) {
-      SPR[type] = TableMinis.sprite(figType(type), u, figOpts(type));
-      if (type === 'druid') { SPR.__bear = TableMinis.sprite('caveBear', u, { faction: 'hero' }); SPRW.__bear = TableMinis.flash(SPR.__bear); }
-      SPRW[type] = TableMinis.flash(SPR[type]);
-    }
+    SPRU = L.cell * L.dpr;
   }
+  function spr(type) {
+    return SPR[type] || (SPR[type] = type === '__bear' ? TableMinis.sprite('caveBear', SPRU, { faction: 'hero' }) : TableMinis.sprite(figType(type), SPRU, figOpts(type)));
+  }
+  function sprW(type) { return SPRW[type] || (SPRW[type] = TableMinis.flash(spr(type))); }
 
   // a sprite in the dark, baked once per shade step, so a shaded mini costs one draw like any other
   const SHADE_STEP = 0.12;
@@ -1207,7 +1213,7 @@
   }
   function drawSprite(st) {
     const bear = st.sp.form === 'bear', key = spriteKey(st.sp), pp = st.pose ? poseSprite(key, st.pose) : null, k = 1 / L.dpr, c = L.cell;
-    const s = pp ? pp.sp : bear ? SPR.__bear : SPR[st.sp.type];
+    const s = pp ? pp.sp : spr(bear ? '__bear' : st.sp.type);
     if (st.sp.inside) return; // swallowed by a gelatinous cube
     ctx.save();
     ctx.globalAlpha = st.alpha;
@@ -1220,7 +1226,7 @@
     const level = st.shade ? Math.round(st.shade / SHADE_STEP) : 0;
     ctx.drawImage(level > 0 ? shaded(pp ? key + '|' + st.pose : key, s, level) : s.cv, -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k);
     ctx.filter = 'none';
-    if (st.flash > 0) { ctx.globalAlpha = st.alpha * st.flash * 0.8; ctx.drawImage(pp ? pp.white : bear ? SPRW.__bear : SPRW[st.sp.type], -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); }
+    if (st.flash > 0) { ctx.globalAlpha = st.alpha * st.flash * 0.8; ctx.drawImage(pp ? pp.white : sprW(bear ? '__bear' : st.sp.type), -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); }
     ctx.restore();
   }
   function drawLevel(st) { // one gold chevron per level past the first, painted on the front of the base
@@ -1262,7 +1268,7 @@
   }
   function drawGhost() {
     if (!selected || !hover || !started || paused || HTL.canPlace(S, selected, hover.lane, hover.sq)) return;
-    const s = SPR[selected], k = 1 / L.dpr, p = gpos(hover.lane, hover.sq);
+    const s = spr(selected), k = 1 / L.dpr, p = gpos(hover.lane, hover.sq);
     ctx.globalAlpha = 0.5; ctx.save(); ctx.translate(p.x, p.y); if (L.horiz && SPRL.has(selected)) ctx.scale(-1, 1);
     ctx.drawImage(s.cv, -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); ctx.restore(); ctx.globalAlpha = 1;
   }
