@@ -34,7 +34,7 @@
   const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
     barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
   const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-  const VERSION = '1.7.12'; // shown in the credits, so testers can say which version they were playing
+  const VERSION = '1.7.13'; // shown in the credits, so testers can say which version they were playing
   const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
   const cv = $('board'), ctx = cv.getContext('2d');
@@ -426,6 +426,18 @@
 
   /* ---------- pillars: unpainted resin columns, drawn in among the minis so they hide what stands behind them ---------- */
   let PILLAR = null;
+  // Safari is slow to draw one canvas onto another, and the board does that dozens of times a frame (the mat, every mini,
+  // every pillar). An ImageBitmap of each is the fast path: made once in the background the first time it's drawn, and
+  // drawn instead from then on; until it's ready, the canvas itself is. Frame timings' I key switches it off, to compare.
+  const BM = new WeakMap();
+  let useBitmaps = typeof createImageBitmap === 'function';
+  function img(cv) {
+    if (!useBitmaps || !cv) return cv;
+    const b = BM.get(cv);
+    if (b && typeof b === 'object') return b;
+    if (!b) { BM.set(cv, 1); createImageBitmap(cv).then(x => BM.set(cv, x), () => BM.set(cv, 2)); } // 2: no bitmap, keep the canvas
+    return cv;
+  }
   function renderPillar(u) {
     const W = Math.ceil(u * 1.0), H = Math.ceil(u * 1.95), cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
@@ -459,7 +471,7 @@
     ctx.globalAlpha = 0.45; ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.ellipse(st.gx + c * 0.04, st.gy + c * 0.12, c * 0.48, c * 0.2, 0, 0, TAU); ctx.fill();
     ctx.globalAlpha = alpha;
-    ctx.drawImage(s.cv, st.gx - s.ax * k, st.gy - s.ay * k, s.cv.width * k, s.cv.height * k);
+    ctx.drawImage(img(s.cv), st.gx - s.ax * k, st.gy - s.ay * k, s.cv.width * k, s.cv.height * k);
     ctx.globalAlpha = 1;
   }
   const TERRAIN = {
@@ -1159,7 +1171,7 @@
     V.now = now;
     ctx.setTransform(L.dpr, 0, 0, L.dpr, 0, 0);
     ctx.clearRect(0, 0, L.W, L.H);
-    ctx.drawImage(boardCache, 0, 0, L.W, L.H);
+    ctx.drawImage(img(boardCache), 0, 0, L.W, L.H);
     if (V.fallen && V.fallen.length) {
       if (SET.paws && !calm()) sweepFallen(now);
       else { for (const f of V.fallen) { f.sp.anims.push({ k: 'fade', t0: now, dur: 0.5, persist: true }); f.sp.removeAt = now + 0.5; } V.fallen = []; } // paws switched off: they fade as before
@@ -1243,9 +1255,9 @@
     if (pp ? st.flip : turned(st.sp)) ctx.scale(-1, 1); // a sprite is centred on its ground point, so this mirrors it in place
     if (st.sp.stone) ctx.filter = 'brightness(0.62) contrast(0.85)'; // only a mini turned to stone touches the filter: some browsers slow down for any filter
     const level = st.shade ? Math.round(st.shade / SHADE_STEP) : 0;
-    ctx.drawImage(level > 0 ? shaded(pp ? key + '|' + st.pose : key, s, level) : s.cv, -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k);
+    ctx.drawImage(img(level > 0 ? shaded(pp ? key + '|' + st.pose : key, s, level) : s.cv), -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k);
     if (st.sp.stone) ctx.filter = 'none';
-    if (st.flash > 0) { ctx.globalAlpha = st.alpha * st.flash * 0.8; ctx.drawImage(pp ? pp.white : sprW(bear ? '__bear' : st.sp.type), -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); }
+    if (st.flash > 0) { ctx.globalAlpha = st.alpha * st.flash * 0.8; ctx.drawImage(img(pp ? pp.white : sprW(bear ? '__bear' : st.sp.type)), -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); }
     ctx.restore();
   }
   function drawLevel(st) { // one gold chevron per level past the first, painted on the front of the base
@@ -1289,7 +1301,7 @@
     if (!selected || !hover || !started || paused || HTL.canPlace(S, selected, hover.lane, hover.sq)) return;
     const s = spr(selected), k = 1 / L.dpr, p = gpos(hover.lane, hover.sq);
     ctx.globalAlpha = 0.5; ctx.save(); ctx.translate(p.x, p.y); if (L.horiz && SPRL.has(selected)) ctx.scale(-1, 1);
-    ctx.drawImage(s.cv, -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); ctx.restore(); ctx.globalAlpha = 1;
+    ctx.drawImage(img(s.cv), -s.ax * k, -s.ay * k, s.cv.width * k, s.cv.height * k); ctx.restore(); ctx.globalAlpha = 1;
   }
   function drawBadSquares(now) {
     V.bad = V.bad.filter(b => now - b.t0 < 0.5);
@@ -2669,6 +2681,7 @@
     const n = parseInt(e.key, 10);
     if (n >= 0 && n <= 9 && !isNaN(n)) { const t = HERO_ORDER[n === 0 ? 9 : n - 1]; if (t) { selectHero(t); return; } }
     if (e.key === 'm' || e.key === 'M') { toggleSound(); return; }
+    if ((e.key === 'i' || e.key === 'I') && SET.perf && typeof createImageBitmap === 'function') { useBitmaps = !useBitmaps; hint(useBitmaps ? 'Drawing from bitmaps.' : 'Drawing from canvases.', 1400); return; }
     if (e.key === 'q' || e.key === 'Q') { aim('pounce'); return; }
     if (e.key === 'w' || e.key === 'W') { aim('swat'); return; }
     if ((e.key === 'g' || e.key === 'G') && S && S.gate) { dropGate(); return; }
@@ -2704,12 +2717,18 @@
           let box = el();
           if (!box) { box = document.createElement('div'); box.id = 'perf'; box.setAttribute('aria-hidden', 'true'); document.body.appendChild(box); }
           const n = Math.max(1, frames - 1), ms = p => (sum[p] / frames).toFixed(1);
-          box.textContent = Math.round(1000 * n / Math.max(1, gaps)) + ' fps · ' + (gaps / n).toFixed(0) + ' ms a frame · board ' + cv.width + '×' + cv.height + ' (' + (L ? L.dpr.toFixed(2) : '?') + '×)\n' +
+          box.textContent = Math.round(1000 * n / Math.max(1, gaps)) + ' fps · ' + (gaps / n).toFixed(0) + ' ms a frame · board ' + cv.width + '×' + cv.height + ' (' + (L ? L.dpr.toFixed(2) : '?') + '×) · ' + (useBitmaps ? 'bitmaps' : 'canvases') + ' (I)\n' +
             parts.map(p => p + ' ' + ms(p)).join(' · ') + ' ms';
           parts.forEach(p => { sum[p] = 0; }); frames = 0; gaps = 0; from = ts;
         }
       },
-      mark(part) { if (!SET.perf) return; const now = performance.now(); sum[part] += now - t; t = now; }
+      mark(part) {
+        if (!SET.perf) return;
+        // Safari draws in the background, so a part looks free unless we wait for it: reading back one pixel waits.
+        // Only while Frame timings are on.
+        if (part !== 'sim' && part !== 'panels' && ctx) try { ctx.getImageData(0, 0, 1, 1); } catch (e) { /* fine */ }
+        const now = performance.now(); sum[part] += now - t; t = now;
+      }
     };
   })();
   // watch the gaps between frames in a battle; if most of 90 come slower than about 40 a second, draw the board a step softer
