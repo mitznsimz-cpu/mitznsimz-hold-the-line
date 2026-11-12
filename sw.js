@@ -9,7 +9,7 @@ const CACHE = 'hold-the-line';
 // every file the page loads (the tests check this against index.html)
 const FILES = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-32.png', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
   'mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'simz.js', 'modes.js', 'campaign.js',
-  'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'];
+  'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/motes.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'];
 const FONTS = /^https:\/\/fonts\.(googleapis|gstatic)\.com\//;
 
 self.addEventListener('install', e => {

@@ -1491,6 +1491,13 @@ test('every monster is written out with named fields, all of them present and th
   assert.ok(!/\bM\(|\bA\(/.test(read('pack-core.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'no positional helpers left in the pack');
 });
 
+// ---------- motes ----------
+test('every battle has a theme the page has motes for, and every theme names a kind of mote', () => {
+  const M = vm.runInContext(read('view/motes.js') + '\n;({ MOTE_THEMES, MOTE_KINDS })', vm.createContext({}));
+  for (const b of packAsWritten().battles) assert.ok(b.theme && M.MOTE_THEMES[b.theme], b.id + ' has no theme with motes (' + b.theme + ')');
+  for (const [t, [kind, col]] of Object.entries(M.MOTE_THEMES)) { assert.ok(M.MOTE_KINDS[kind], t + ': no mote called ' + kind); assert.ok(/^#[0-9a-f]{6}$/i.test(col), t + ': colour'); }
+});
+
 // ---------- offline ----------
 test('the offline worker keeps every file the page loads, and only those', () => {
   const page = read('index.html'), sw = read('sw.js');
@@ -1590,7 +1597,7 @@ test('every monster card says what each of its traits does', () => {
 
 // ---------- coverage: every mini fights somewhere ----------
 test('the page loads the shared minis, then the pack, then the rules, then the game', () => {
-  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'simz.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
+  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'simz.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/motes.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
   assert.ok(order.every(i => i > 0), 'a script tag is missing: ' + order);
   assert.ok(order.every((i, k) => !k || i > order[k - 1]), 'scripts load out of order');
   assert.ok(!/MINI CORE START/.test(page), 'the page should load mitznsimz_minis.js, not carry a copy');

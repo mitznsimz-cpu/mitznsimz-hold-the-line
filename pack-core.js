@@ -354,9 +354,12 @@ HTL_PACKS.core = (function () {
   /* Battles. Spawn tokens: type:round, type:round*count for several at once through different doors,
      and @n on the end to send them through door n of the map (doors are numbered in reading order).
      Rounds count from the start of the wave. A wave's doors list limits which doors it uses; without one it uses them all.
-     map: one of MAPS below; the cellar floor if left out. */
+     map: one of MAPS below; the cellar floor if left out.
+     theme: how the battle looks, never how it plays. Most are zones of the Dungeon Delve's dressed stone (damp, sunken, sewer,
+     lava, frost, crypt, ossuary, tomb, dwarven, mine, fungal, lodge), so the two games share them; kitchen, yard and garden
+     are the house's own. The page draws its drifting motes from it (view/motes.js). */
   const BATTLES = [
-    { id: 'warren', name: 'The Goblin Warren', gold: 150, by: 'Simz',
+    { id: 'warren', theme: 'damp', name: 'The Goblin Warren', gold: 150, by: 'Simz',
       line: 'Something has been nicking the cheese. Something with a lot of cousins.',
       waves: [
         { name: 'Rats in the Cellar', by: 'Simz', line: 'Just rats. Big ones. Lots of them.',
@@ -370,7 +373,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Goblin Chief', by: 'Simz', line: 'The boss of the goblins. Two axe swings a turn and a very big shield.',
           spawns: 'goblin:0*2 goblinArcher:1 kobold:2*2 goblinShaman:4 goblin:5*2 goblinChief:7 goblinArcher:8*2 caveBat:9 goblin:10*2 direRat:12*3' }
       ] },
-    { id: 'caves', dark: true, name: 'The Deep Caves', gold: 200, by: 'Mitz',
+    { id: 'caves', theme: 'fungal', dark: true, name: 'The Deep Caves', gold: 200, by: 'Mitz',
       line: 'The cellar goes deeper than the landlord admits. Things live down there.',
       waves: [
         { name: 'Things in the Dark', by: 'Mitz', line: 'Leeches heal themselves on whatever they bite. Don’t let them feed.',
@@ -384,7 +387,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Cave Bear Wakes', by: 'Mitz', line: 'Two cave bears, and each one swings twice. Stack your Fighters.',
           spawns: 'direWolf:0*2 giantBeetle:2 tombSpider:3*2 caveBear:6 warrenHound:7*2 caveSerpent:9 direWolf:10 caveBear:12 deepLeech:13*4' }
       ] },
-    { id: 'crypt', dark: true, name: 'The Old Crypt', gold: 175, by: 'Simz',
+    { id: 'crypt', theme: 'crypt', dark: true, name: 'The Old Crypt', gold: 175, by: 'Simz',
       line: 'The crypt under the tavern. Whose idea was it to build on a graveyard?',
       waves: [
         { name: 'Restless Bones', by: 'Simz', line: 'Skeletons are slow. Rot grubs are slower. Neither of them stops.',
@@ -398,7 +401,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Shade of Grelminar', by: 'Simz', line: 'The old sorcerer himself. He heals, and he calls up wisps to fight for him.',
           spawns: 'skeleton:0*3 ghoul:2 skelArcher:3*2 boneKnight:5 shade:7 cryptWarden:8 shadeWisp:9*2 ghoul:11*2 skeleton:13*3' }
       ] },
-    { id: 'vaults', name: 'The Wine Vaults', map: 'pillars', gold: 150, by: 'Mitz',
+    { id: 'vaults', theme: 'lodge', name: 'The Wine Vaults', map: 'pillars', gold: 150, by: 'Mitz',
       line: 'Smugglers have been using the wine vaults. The pillars are older than the tavern, and very much in the way.',
       waves: [
         { name: "Smugglers' Run", by: 'Mitz', line: 'Pillars block the way and the view. Monsters walk round them, and nobody shoots through them.',
@@ -412,7 +415,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Muscle', by: 'Mitz', line: 'The smugglers brought an ogre. Then they brought another one.',
           spawns: 'orc:0*2 brigand:1*2 brigandArcher:3 ogre:5 orcRaider:6*3 renegadeMage:8 ogre:10 brigand:11*2 orcChampion:13 orcRaider:14*3' }
       ] },
-    { id: 'road', name: 'The Warband Road', gold: 200, by: 'Mitz',
+    { id: 'road', theme: 'damp', name: 'The Warband Road', gold: 200, by: 'Mitz',
       line: 'Bandits on the road, orcs behind them, and a priest nobody trusts.',
       waves: [
         { name: 'Highwaymen', by: 'Mitz', line: 'Your money or your life. They would prefer both.',
@@ -426,7 +429,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Warband', by: 'Mitz', line: 'Champions swing twice, the ogre swings hard, and everyone is angry.',
           spawns: 'orcRaider:0*3 orc:2*2 fallenPriest:4 orcChampion:6 brigandArcher:7*2 ogre:9 renegadeMage:10 orc:11*2 orcChampion:13 orcRaider:14*3' }
       ] },
-    { id: 'march', name: 'The Hobgoblin March', gold: 250, by: 'Simz',
+    { id: 'march', theme: 'mine', name: 'The Hobgoblin March', gold: 250, by: 'Simz',
       cats: { warlock: 'Eldritch Blast is magic, so the shield wall does not stop it.', monk: 'No armour for the rust monsters to eat.', druid: 'Produce Flame stops the trolls healing.' },
       line: 'Hobgoblins march in step, and they have brought everything that bites, burrows and rusts.',
       waves: [
@@ -441,7 +444,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Trolls', by: 'Simz', line: 'Trolls heal ten a turn, unless something has just set them on fire.',
           spawns: 'troll:0 hobgoblin:1*3 wolfRider:3*2 troll:5 rustMonster:6*2 ankheg:8 troll:10 hobgoblin:11*3 wolfRider:13*2' }
       ] },
-    { id: 'flooded', dark: true, name: 'The Sunken Chapel', map: 'flooded', gold: 200, by: 'Simz',
+    { id: 'flooded', theme: 'sunken', dark: true, name: 'The Sunken Chapel', map: 'flooded', gold: 200, by: 'Simz',
       line: 'The chapel under the crypt has flooded. The water is cold, black, and not empty.',
       waves: [
         { name: 'Black Water', by: 'Simz', line: 'Wading is slow, so walkers go round the water if they can. Most of them can.', doors: [1, 2, 3],
@@ -455,7 +458,7 @@ HTL_PACKS.core = (function () {
         { name: 'High Water', by: 'Simz', line: 'Everything that was under the water, all at once.',
           spawns: 'wight:0*2 skeleton:1*3 boneTitan:3 wraith:4 ghoul:6@0 ghoul:6@4 cryptWarden:7*2 wight:9*3 wraith:10*2 boneTitan:12 skeleton:13*4' }
       ] },
-    { id: 'barrow', dark: true, name: 'The Barrow', gold: 250, by: 'Simz',
+    { id: 'barrow', theme: 'ossuary', dark: true, name: 'The Barrow', gold: 250, by: 'Simz',
       line: 'The barrow kings are waking up. Bring torches. Bring Wizards.',
       waves: [
         { name: 'Barrow Mist', by: 'Simz', line: 'Wights drink the life they take. Hit them hard and fast.',
@@ -469,7 +472,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Barrow Lich', by: 'Simz', line: 'The barrow king. Deathbolts from four squares, and a fresh skeleton every third turn.',
           spawns: 'wight:0*2 skeleton:1*3 wraith:3 barrowLich:5 boneTitan:7 ghoul:8*2 wight:10 wraith:12 skeleton:13*3' }
       ] },
-    { id: 'bridge', dark: true, name: 'The Long Drop', map: 'bridge', gold: 250, by: 'Mitz',
+    { id: 'bridge', theme: 'mine', dark: true, name: 'The Long Drop', map: 'bridge', gold: 250, by: 'Mitz',
       cats: { tinker: 'Every walker has to cross the bridge. Traps there catch them all.' },
       line: 'A chasm under the cellar, one narrow bridge, and a great many wings.',
       waves: [
@@ -484,7 +487,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Crossing', by: 'Mitz', line: 'Everything at once, on foot and on wings.',
           spawns: 'gargoyle:0*2 orcChampion:2 caveBat:3*4 wraith:5 ogre:6 gargoyle:8*2 wraith:9*2 orcChampion:11 caveBat:12*4 ogre:13' }
       ] },
-    { id: 'halls', name: 'The Deep Halls', gold: 300, by: 'Mitz',
+    { id: 'halls', theme: 'dwarven', name: 'The Deep Halls', gold: 300, by: 'Mitz',
       cats: { sorcerer: 'Lightning is magic, and the stone things here shrug off steel.' },
       line: 'Below everything, the old halls. Stone that walks, and dark that eats.',
       waves: [
@@ -499,7 +502,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Stone Colossus', by: 'Mitz', line: 'The biggest thing under the tavern. Two fists, and swords barely chip it.',
           spawns: 'gargoyle:0*2 ironSentinel:2 clayGolem:4 stoneColossus:6 emberWisp:7*3 deepHorror:9 gloom:10*2 ironSentinel:12 gargoyle:13*2' }
       ] },
-    { id: 'lair', dark: true, name: 'The Red Wyrm’s Lair', map: 'bridge', gold: 300, by: 'Simz',
+    { id: 'lair', theme: 'lava', dark: true, name: 'The Red Wyrm’s Lair', map: 'bridge', gold: 300, by: 'Simz',
       cats: { paladin: 'Its light shows up the imps, and its smite is twice as hard on the dead.' },
       line: 'Under everything else, past the halls, something warm is breathing.',
       waves: [
@@ -515,7 +518,7 @@ HTL_PACKS.core = (function () {
           spawns: 'imp:0*3 skeleton:1*3 vampire:2 redDragon:4 necromancer:5 imp:6*3 medusa:8 gelCube:9 ghoul:10*2 imp:12*3' }
       ] },
     // Phase 6: battles on the new shapes
-    { id: 'stores', map: 'corner', name: 'The Back Stores', gold: 250, by: 'Simz',
+    { id: 'stores', theme: 'lodge', map: 'corner', name: 'The Back Stores', gold: 250, by: 'Simz',
       line: 'The back stores turn a corner. Two doors at the far end, and two more round the bend.',
       waves: [
         { name: 'Round the Bend', by: 'Simz', line: 'Half of them come round the corner. Keep a hero where the two halves meet.',
@@ -529,7 +532,7 @@ HTL_PACKS.core = (function () {
         { name: 'Everything at Once', by: 'Simz', line: 'They have found a way round the corner and down the long side at once.',
           spawns: 'troll:0 orc:1*3 wolfRider:2*2 ogre:3 hobgoblin:4*2 orcChampion:6*2 troll:8 ogre:9 wolfRider:10*2 orc:12*3' }
       ] },
-    { id: 'crossing', map: 'crossing', name: 'The Old Crossing', gold: 250, by: 'Mitz',
+    { id: 'crossing', theme: 'damp', map: 'crossing', name: 'The Old Crossing', gold: 250, by: 'Mitz',
       line: 'Two passages cross under the yard. Things come down from above, up from below, and straight along.',
       waves: [
         { name: 'From Above', by: 'Mitz', line: 'Something comes down the passage at the top. Watch where it joins the main way.',
@@ -543,7 +546,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Crossroads Bell', by: 'Mitz', line: 'The bell under the crossing rings, and the bone titan answers.',
           spawns: 'boneKnight:0*2 wight:1 ghoul:2*3 boneTitan:4 fallenPriest:6 skeleton:7*3 wraith:9 boneKnight:10*2 ghoul:12*2' }
       ] },
-    { id: 'kennels', map: 'horseshoe', name: 'The Kennels', gold: 275, by: 'Simz',
+    { id: 'kennels', theme: 'lodge', map: 'horseshoe', name: 'The Kennels', gold: 275, by: 'Simz',
       line: 'The old kennels run round in a horseshoe: in at the far end, all the way round, and out at our end.',
       waves: [
         { name: 'Let Out', by: 'Simz', line: 'They come all the way round. Shooters can see up and down the long sides here.',
@@ -557,7 +560,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Kennel Master', by: 'Simz', line: 'An ogre with a whip, and everything it keeps.',
           spawns: 'ogre:0 caveBear:1 direWolf:2*3 tombSpider:3*2 ogre:5 caveBear:6 giantBeetle:7*2 direWolf:9*3 ogre:11 caveBear:12' }
       ] },
-    { id: 'runs', crowds: true, name: 'The Rat Runs', gold: 275, by: 'Mitz',
+    { id: 'runs', theme: 'sewer', crowds: true, name: 'The Rat Runs', gold: 275, by: 'Mitz',
       line: 'Under the floorboards the rats have dug their own cellar. In here the small ones squeeze in three to a square.',
       waves: [
         { name: 'Squeaking', by: 'Mitz', line: 'Rats pile up three to a square. Throw something at the pile: the belt is in the armoury.',
@@ -572,7 +575,7 @@ HTL_PACKS.core = (function () {
           spawns: 'direRat:0*3 goblin:1*3 imp:2*2 caveBat:4*2 goblinChief:5 goblinShaman:6 direRat:7*3 goblinArcher:9*2 imp:10*2 warrenHound:11*2 goblin:12*2' }
       ] },
     // Phase 6: three battles for the Delve's monsters
-    { id: 'cistern', map: 'flooded', name: 'The Drowned Cistern', gold: 300, by: 'Mitz',
+    { id: 'cistern', theme: 'sunken', map: 'flooded', name: 'The Drowned Cistern', gold: 300, by: 'Mitz',
       line: 'Under the cellar there is an old cistern. It was dry, once. Something has been climbing out of it.',
       waves: [
         { name: 'Wet Feet', by: 'Mitz', line: 'Giant crabs: arrows skate off their shells, and water doesn’t slow them.',
@@ -586,7 +589,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Thing in the Cistern', by: 'Mitz', line: 'Something big has come up for air.',
           spawns: 'drowned:0*3 giantFrog:1*3 giantCrab:2*3 lizardfolk:3*2 deepHorror:5 drowned:6*3 troll:8 giantFrog:9*3 drowned:11*3 giantCrab:12*3' }
       ] },
-    { id: 'tomb', name: 'The Sealed Tomb', gold: 300, by: 'Simz',
+    { id: 'tomb', theme: 'tomb', name: 'The Sealed Tomb', gold: 300, by: 'Simz',
       line: 'Behind the barrow there was a door with a seal on it. There isn’t now.',
       waves: [
         { name: 'Grave Goods', by: 'Simz', line: 'Treasure chests on the mat? One of them has teeth. It wakes when a hero comes close.',
@@ -600,7 +603,7 @@ HTL_PACKS.core = (function () {
         { name: 'Whoever Was Sealed In', by: 'Simz', line: 'The barrow lich has been waiting a long time for visitors.',
           spawns: 'mummy:0*2 animatedArmour:1*2 skeleton:2*3 mimic:3 barrowLich:5 mummy:6*2 wight:8 animatedArmour:9*2 mummy:11*2 skelArcher:12*2' }
       ] },
-    { id: 'forge', map: 'bridge', name: 'The Old Forge', gold: 300, by: 'Mitz',
+    { id: 'forge', theme: 'lava', map: 'bridge', name: 'The Old Forge', gold: 300, by: 'Mitz',
       line: 'The tavern’s old forge sits over the chasm, and the fire in it has started to walk about.',
       waves: [
         { name: 'Sparks', by: 'Mitz', line: 'Ember wisps and animated armour, the forge’s old work.',
@@ -615,7 +618,7 @@ HTL_PACKS.core = (function () {
           spawns: 'salamander:0*2 animatedArmour:1*3 emberWisp:2*3 stoneColossus:4 salamander:6*2 clayGolem:7 gargoyle:8*2 salamander:10*2 animatedArmour:12*3' }
       ] },
     // Phase 7: the rest of the house. These open once the Red Wyrm's Lair is won, part by part.
-    { id: 'larder', stage: 2, part: 'kitchens', map: 'larder', name: 'The Larder', gold: 275, by: 'Mitz',
+    { id: 'larder', theme: 'lodge', stage: 2, part: 'kitchens', map: 'larder', name: 'The Larder', gold: 275, by: 'Mitz',
       line: 'Something has been at the cheese. The larder floor has two old trapdoors, and they are not as shut as they look.',
       waves: [
         { name: 'Cheese Thieves', by: 'Mitz', line: 'Rats and kobolds through the back doors. You can stand on the trapdoors, for now.',
@@ -629,7 +632,7 @@ HTL_PACKS.core = (function () {
         { name: 'Everything Comes Up', by: 'Mitz', line: 'Both trapdoors and every door at once.',
           spawns: 'ogre:0 orc:1@1 orc:2@4 hobgoblin:3*2 orcRaider:4@1 goblinArcher:5*2 ogre:7 orc:8@4 orcChampion:10 orcRaider:11*2 ogre:12@1 orcChampion:13 hobgoblin:14*2' }
       ] },
-    { id: 'scullery', stage: 2, part: 'kitchens', map: 'scullery', crowds: true, name: 'The Scullery', gold: 275, by: 'Simz',
+    { id: 'scullery', theme: 'lodge', stage: 2, part: 'kitchens', map: 'scullery', crowds: true, name: 'The Scullery', gold: 275, by: 'Simz',
       line: 'Two ways in and one way out, past the ovens. In here the small ones squeeze in three to a square.',
       waves: [
         { name: 'Through the Scullery', by: 'Simz', line: 'They come down both sides and meet in the middle.',
@@ -643,7 +646,7 @@ HTL_PACKS.core = (function () {
         { name: 'What Lives in the Big Oven', by: 'Simz', line: 'Salamanders. Fire won’t touch them either.',
           spawns: 'salamander:0 imp:1*2 orc:2*2 emberWisp:3*2 hobgoblin:5*2 goblin:7*3 salamander:9 orcChampion:11' }
       ] },
-    { id: 'kitchen', stage: 2, part: 'kitchens', map: 'kitchen', name: 'The Great Kitchen', gold: 300, by: 'Mitz',
+    { id: 'kitchen', theme: 'kitchen', stage: 2, part: 'kitchens', map: 'kitchen', name: 'The Great Kitchen', gold: 300, by: 'Mitz',
       line: 'Ovens along both walls, two hatches in the floor, and something very large in the larder.',
       waves: [
         { name: 'Kitchen Porters', by: 'Mitz', line: 'Orcs carrying sacks. The sacks are full of goblins.',
@@ -657,7 +660,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Larder Ogre', by: 'Mitz', line: 'Whatever ate the cheese is the size of the larder door, and it has a cleaver.',
           spawns: 'larderOgre:0 orc:1*2@2 ogre:3 hobgoblin:4*2 orcRaider:5*2@4 orcChampion:7 imp:8*2 ogre:10 orc:11*3' }
       ] },
-    { id: 'racks', stage: 2, part: 'brewhouse', map: 'racks', crowds: true, name: 'The Racks', gold: 275, by: 'Simz',
+    { id: 'racks', theme: 'lodge', stage: 2, part: 'brewhouse', map: 'racks', crowds: true, name: 'The Racks', gold: 275, by: 'Simz',
       line: 'The racks run back and forth across the brewhouse cellar, and the barrels run down them. A third door opens straight onto the last run, and the small ones come through three at a time.',
       waves: [
         { name: 'Barrels Coming', by: 'Simz', line: 'Every few rounds a barrel rolls down a chute. It bowls over anything in its way, heroes too. A barricade stops it.',
@@ -671,7 +674,7 @@ HTL_PACKS.core = (function () {
         { name: 'Rolling Thunder', by: 'Simz', line: 'Ogres. A barrel won’t knock an ogre over; it just breaks on it.',
           spawns: 'ogre:0 orcChampion:1@2 goblin:2*3 brigand:3*3 wolfRider:4*2@2 troll:5 ogre:6 renegadeMage:7 hobgoblin:8*2 goblin:9*3@2 orcChampion:10 brigandArcher:11*2 ogre:12@2 troll:14 orcChampion:15*2 troll:16@2' }
       ] },
-    { id: 'vats', stage: 2, part: 'brewhouse', map: 'vats', name: 'The Vat Room', gold: 275, by: 'Mitz',
+    { id: 'vats', theme: 'damp', stage: 2, part: 'brewhouse', map: 'vats', name: 'The Vat Room', gold: 275, by: 'Mitz',
       line: 'Five runs past the vats, and a barrel chute down every other one.',
       waves: [
         { name: 'Between the Vats', by: 'Mitz', line: 'The vats block the view along their runs. The barrels come down the runs without vats.',
@@ -685,7 +688,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Cellarman’s Mistake', by: 'Mitz', line: 'Everything that lives in a vat, and the smugglers who were stealing from them.',
           spawns: 'ogre:0 gelCube:1 orcChampion:2 brigand:3*3 troll:5 renegadeMage:6 gloom:7*2 ogre:8 hobgoblin:9*2 orcChampion:10*2 brigandArcher:11*2 troll:12 wolfRider:13*2 ogre:14' }
       ] },
-    { id: 'brewhouse', stage: 2, part: 'brewhouse', map: 'brewhouse', name: 'The Brewhouse', gold: 300, by: 'Simz',
+    { id: 'brewhouse', theme: 'lodge', stage: 2, part: 'brewhouse', map: 'brewhouse', name: 'The Brewhouse', gold: 300, by: 'Simz',
       line: 'Four barrel chutes, two rows of vats, and the biggest mash tun has started to move.',
       waves: [
         { name: 'Last Orders', by: 'Simz', line: 'The middle row has no chute. It’s the only safe road through the brewhouse.',
@@ -699,7 +702,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Ferment', by: 'Simz', line: 'The biggest mash tun, alive and sliding. Barrels just bounce off it.',
           spawns: 'theFerment:0 gloom:1*2 brigand:2*2 orcChampion:4 ogre:5 gelCube:7 brigandArcher:8*2 hobgoblin:10*2 orc:11*3' }
       ] },
-    { id: 'yard', stage: 2, part: 'stables', map: 'yard', name: 'The Stable Yard', gold: 275, by: 'Mitz',
+    { id: 'yard', theme: 'yard', stage: 2, part: 'stables', map: 'yard', name: 'The Stable Yard', gold: 275, by: 'Mitz',
       line: 'The yard is wide open, and everything in it is fast.',
       waves: [
         { name: 'Horse Thieves', by: 'Mitz', line: 'Brigands after the horses, and their dogs.',
@@ -713,7 +716,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Whole Pack', by: 'Mitz', line: 'Every wolf for miles, and the bears behind them.',
           spawns: 'caveBear:0 wolfRider:1*3 direWolf:2*2 hobgoblin:4*2 orcChampion:5 wolfRider:7*2 caveBear:8 direWolf:9*3 brigandArcher:10*2 orcChampion:12' }
       ] },
-    { id: 'barn', stage: 2, part: 'stables', map: 'barn', crowds: true, name: 'The Hay Barn', gold: 275, by: 'Simz',
+    { id: 'barn', theme: 'yard', stage: 2, part: 'stables', map: 'barn', crowds: true, name: 'The Hay Barn', gold: 275, by: 'Simz',
       line: 'Two ways round the hay barn, and every monster from the middle doors takes the one you’ve left weakest.',
       waves: [
         { name: 'Two Ways Round', by: 'Simz', line: 'Wall off one side and they all go the other. Cover both.',
@@ -727,7 +730,7 @@ HTL_PACKS.core = (function () {
         { name: 'Everything in the Yard', by: 'Simz', line: 'All of it, both ways round.',
           spawns: 'caveBear:0 wolfRider:1*2 orcChampion:2 direWolf:3*2 hobgoblin:5*2 caveBear:7 wolfRider:8*2 troll:10 orc:11*2 orcChampion:13 ogre:14 caveBear:15 orcChampion:16' }
       ] },
-    { id: 'stables', stage: 2, part: 'stables', map: 'stables', name: 'The Stables', gold: 300, by: 'Mitz',
+    { id: 'stables', theme: 'yard', stage: 2, part: 'stables', map: 'stables', name: 'The Stables', gold: 300, by: 'Mitz',
       line: 'The ring round the barn, two more doors, and the yard gate across the top way. Drop it once a battle.',
       waves: [
         { name: 'The Yard Gate', by: 'Mitz', line: 'Drop the gate and the top way is shut for a few rounds: everything goes round the bottom.',
@@ -741,7 +744,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Pack Leader', by: 'Mitz', line: 'The biggest wolf, and the biggest rider on it.',
           spawns: 'packLeader:0 wolfRider:1*2 direWolf:2*3 caveBear:4 orcChampion:5 wolfRider:7*2 hobgoblin:8*2 troll:10 direWolf:11*3 orcChampion:13' }
       ] },
-    { id: 'lawn', stage: 2, part: 'garden', map: 'lawn', crowds: true, name: 'The Beer Garden', gold: 300, by: 'Mitz',
+    { id: 'lawn', theme: 'garden', stage: 2, part: 'garden', map: 'lawn', crowds: true, name: 'The Beer Garden', gold: 300, by: 'Mitz',
       line: 'Tables out on the lawn, and something has been digging under it all summer. You can stand on the molehills, until they open.',
       waves: [
         { name: 'Last Orders', by: 'Mitz', line: 'Goblins after the leftovers, and rats under the tables.',
@@ -755,7 +758,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Whole Lawn Comes Up', by: 'Mitz', line: 'Every molehill and every door.',
           spawns: 'ankheg:0@1 ankheg:0@5 giantBeetle:1*2 troll:3 ankheg:4@3 orc:5*2 caveBear:7 ankheg:8@1 hobgoblin:9*2 orcChampion:11 ankheg:12@5' }
       ] },
-    { id: 'pond', stage: 2, part: 'garden', map: 'pond', name: 'The Fish Pond', gold: 300, by: 'Simz',
+    { id: 'pond', theme: 'garden', stage: 2, part: 'garden', map: 'pond', name: 'The Fish Pond', gold: 300, by: 'Simz',
       line: 'Frogs and crabs swim straight across the pond. Everything else goes round it, by whichever side you’ve left weaker.',
       waves: [
         { name: 'Frogspawn', by: 'Simz', line: 'Giant frogs. The pond is no slower for them.',
@@ -769,7 +772,7 @@ HTL_PACKS.core = (function () {
         { name: 'Something Big in the Pond', by: 'Simz', line: 'Trolls round the sides, and everything that swims straight up the middle.',
           spawns: 'drowned:0*3@1 troll:1 giantCrab:2*3 lizardfolk:3*2 drowned:5*3@1 ogre:6 giantFrog:7*3@1 orcChampion:9 drowned:10*3@1 troll:12' }
       ] },
-    { id: 'maze', stage: 2, part: 'garden', map: 'maze', name: 'The Hedge Maze', gold: 300, by: 'Mitz',
+    { id: 'maze', theme: 'garden', stage: 2, part: 'garden', map: 'maze', name: 'The Hedge Maze', gold: 300, by: 'Mitz',
       line: 'Rows of box hedge. Whatever comes through a gap takes the side you’ve left weaker, and bats go straight over the top.',
       waves: [
         { name: 'Lost in the Hedges', by: 'Mitz', line: 'Goblins through the gaps in the hedges. Each one takes the side you’ve left weaker.',
@@ -783,7 +786,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Thing Under the Lawn', by: 'Mitz', line: 'Hurt it badly and it dives, and comes up through a molehill further on.',
           spawns: 'lawnThing:0@3 caveBat:1*2 hobgoblin:2*2 ankheg:4@0 orc:5*2 ankheg:6@6 troll:8 orcChampion:10 caveBat:11*2' }
       ] },
-    { id: 'wellyard', stage: 2, part: 'well', map: 'wellyard', name: 'The Well Yard', gold: 300, by: 'Mitz',
+    { id: 'wellyard', theme: 'garden', stage: 2, part: 'well', map: 'wellyard', name: 'The Well Yard', gold: 300, by: 'Mitz',
       line: 'The old well in the yard. Something has been climbing out of it at night, and it isn’t the cat.',
       waves: [
         { name: 'Buckets', by: 'Mitz', line: 'Leeches up the well rope, goblins over the wall.',
@@ -797,7 +800,7 @@ HTL_PACKS.core = (function () {
         { name: 'Everything in the Well', by: 'Mitz', line: 'The well and every gate at once.',
           spawns: 'drowned:0*2@2 troll:1 giantCrab:2*3@2 orcChampion:4 drowned:5*3@2 hobgoblin:6*2 giantFrog:8*3@2 ogre:10 drowned:11*2@2' }
       ] },
-    { id: 'icehouse', stage: 2, part: 'well', map: 'icehouse', name: 'The Ice House', gold: 300, by: 'Simz',
+    { id: 'icehouse', theme: 'frost', stage: 2, part: 'well', map: 'icehouse', name: 'The Ice House', gold: 300, by: 'Simz',
       line: 'Ice stacked to the roof and a floor like glass. Nothing stops on the ice, and nobody can stand on it. Fight from the floor beside it.',
       waves: [
         { name: 'Slippery', by: 'Simz', line: 'They slide down the ice twice as fast. Hit them from the side as they go past.',
@@ -811,7 +814,7 @@ HTL_PACKS.core = (function () {
         { name: 'Frozen Solid', by: 'Simz', line: 'A troll that slides, and wolves behind it.',
           spawns: 'boneKnight:0 direWolf:1*2 troll:3 wolfRider:4*2 hobgoblin:5*2 ogre:7 direWolf:8*3 orcChampion:10 wight:11' }
       ] },
-    { id: 'well', stage: 2, part: 'well', map: 'well', name: 'The Well', gold: 325, by: 'Mitz',
+    { id: 'well', theme: 'damp', stage: 2, part: 'well', map: 'well', name: 'The Well', gold: 325, by: 'Mitz',
       line: 'Down at the bottom of the well something big has woken up. It heals in the water, so catch it on dry floor.',
       waves: [
         { name: 'Cold Water', by: 'Mitz', line: 'Leeches and the drowned up the well, goblins through the gates.',
@@ -825,7 +828,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Thing in the Well', by: 'Simz', line: 'It heals while it’s in the water. Hold it back until it’s out on the dry floor.',
           spawns: 'thingInWell:0@2 drowned:1*3@0 hobgoblin:2*2@3 giantCrab:3*3@5 troll:4@1 drowned:6*3@4 orcChampion:7@3 wolfRider:8*2@0 giantFrog:9*3@5 troll:11@4 ogre:12@1' }
       ] },
-    { id: 'gallery', stage: 2, part: 'attic', map: 'gallery', crowds: true, name: 'The Long Gallery', gold: 250, by: 'Mitz',
+    { id: 'gallery', theme: 'lodge', stage: 2, part: 'attic', map: 'gallery', crowds: true, name: 'The Long Gallery', gold: 250, by: 'Mitz',
       line: 'A long, narrow attic under the eaves, with two skylights. A long way to walk, so they come in shield walls, and things come in through the roof.',
       waves: [
         { name: 'Dust Sheets', by: 'Mitz', line: 'Hobgoblins in a line, and goblins behind their shields. Arrows struggle past a shield wall.',
@@ -839,7 +842,7 @@ HTL_PACKS.core = (function () {
         { name: 'The Whole Gallery', by: 'Mitz', line: 'Stone things through the roof and everything else along the floor.',
           spawns: 'gargoyle:0*2@0 troll:1 boneKnight:2*2 gargoyle:3*2@3 mummy:4 ogre:5 hobgoblin:6*3 wraith:7*2@0 troll:8 orcChampion:9 boneKnight:10*2 gargoyle:11@3 mummy:12' }
       ] },
-    { id: 'rafters', stage: 2, part: 'attic', map: 'rafters', name: 'The Rafters', gold: 300, by: 'Simz',
+    { id: 'rafters', theme: 'lodge', stage: 2, part: 'attic', map: 'rafters', name: 'The Rafters', gold: 300, by: 'Simz',
       line: 'Up among the beams. A hero on a rafter gets +2 to hit, and the chimney stacks block the view.',
       waves: [
         { name: 'In the Rafters', by: 'Simz', line: 'Bats in the beams, goblins on the boards.',
@@ -853,7 +856,7 @@ HTL_PACKS.core = (function () {
         { name: 'Everything in the Roof', by: 'Simz', line: 'Stone, bone and orcs, and an ogre on the stairs.',
           spawns: 'gargoyle:0*2@1 wraith:1@4 boneKnight:2 hobgoblin:3*2 mummy:5 ogre:6 gargoyle:8@4 wight:9*2 orcChampion:11' }
       ] },
-    { id: 'attic', stage: 2, part: 'attic', map: 'attic', name: 'The Attic', gold: 325, by: 'Mitz',
+    { id: 'attic', theme: 'lodge', stage: 2, part: 'attic', map: 'attic', name: 'The Attic', gold: 325, by: 'Mitz',
       line: 'The top of the house, and its oldest lodger. He heals as fast as you can hurt him, unless the daylight finds him.',
       waves: [
         { name: 'Footsteps Overhead', by: 'Mitz', line: 'Something has been walking about up here at night.',

@@ -50,6 +50,7 @@ function draw(now) {
   prof.mark('minis');
   drawGlows(list);
   drawTorches();
+  drawMotes(now);
   for (const st of list) if (!st.pillar) drawHp(st);
   drawGhost();
   drawAim();

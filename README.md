@@ -100,6 +100,7 @@ The page loads its scripts in this order:
 | `view/board.js` | The board's pieces: the mat, the pillars, and the minis as sprites with their poses |
 | `view/events.js` | Each event from the rules becomes animation, sound and words on the board |
 | `view/draw.js` | Drawing the board each frame, in depth order, with the effects on top |
+| `view/motes.js` | Dust, drips, embers, spores, leaves or snow drifting over the board, from each battle's theme (after the Delve's particles) |
 | `view/hud.js` | The battle's panels: the initiative track, the HUD and hero tray, the belt, the cats' powers, a mini's card, the next wave |
 | `view/tavern.js` | The Cat & Mouse between battles: the hub and every room, and the common room where a party is picked |
 | `view/app.js` | Input, settings and credits, the main loop (with Frame timings and the adaptive sharpness), and boot |
