@@ -102,6 +102,7 @@ The page loads its scripts in this order:
 | `view/events.js` | Each event from the rules becomes animation, sound and words on the board |
 | `view/draw.js` | Drawing the board each frame, in depth order, with the effects on top |
 | `view/floors.js` | Each battle's mat laid with stone, cobbles, tiles or boards from its theme: the Delve's materials baked once with WebGL 2, lit, and kept as a picture. Without WebGL 2, the vinyl mat |
+| `view/plaques.js` | The trophy plaques: walnut with a brass plate, mounting a mini or a cast-brass emblem; trophies not yet won hang dark |
 | `view/motes.js` | Dust, drips, embers, spores, leaves or snow drifting over the board, from each battle's theme (after the Delve's particles) |
 | `view/hud.js` | The battle's panels: the initiative track, the HUD and hero tray, the belt, the cats' powers, a mini's card, the next wave |
 | `view/tavern.js` | The Cat & Mouse between battles: the hub and every room, and the common room where a party is picked |
