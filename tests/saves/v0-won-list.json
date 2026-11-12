@@ -1,0 +1,3 @@
+{ "note": "Before the campaign (v1.0 to v1.2): only the battles won were kept, as a list.",
+  "save": ["warren", "caves", "crypt"],
+  "expect": { "wins": { "warren": { "medium": 1 }, "caves": { "medium": 1 }, "crypt": { "medium": 1 } }, "takings": 150, "upgrades": { "door": 0 } } }
