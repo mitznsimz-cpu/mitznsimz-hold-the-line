@@ -26,10 +26,15 @@ function buildBoard() {
   const m = matRect(), mg = c * 0.1;
   g.save(); g.shadowColor = 'rgba(0,0,0,.6)'; g.shadowBlur = c * 0.4; g.shadowOffsetY = c * 0.06;
   rrPath(g, m.x - mg, m.y - mg, m.w + mg * 2, m.h + mg * 2, c * 0.12); g.fillStyle = '#4c5c54'; g.fill(); g.restore();
+  const floor = floorPattern(g); // the battle's themed floor (view/floors.js), laid square to the grid
+  if (floor) {
+    floor.setTransform(new DOMMatrix().translate(m.x, m.y).scale(1 / L.dpr));
+    rrPath(g, m.x - mg, m.y - mg, m.w + mg * 2, m.h + mg * 2, c * 0.12); g.fillStyle = floor; g.fill();
+  }
   const mgrad = g.createRadialGradient(m.x + m.w / 2, m.y + m.h / 2, c, m.x + m.w / 2, m.y + m.h / 2, Math.max(m.w, m.h) * 0.75);
   mgrad.addColorStop(0, 'rgba(255,255,240,.06)'); mgrad.addColorStop(1, 'rgba(0,0,0,.12)');
   rrPath(g, m.x - mg, m.y - mg, m.w + mg * 2, m.h + mg * 2, c * 0.12); g.fillStyle = mgrad; g.fill();
-  for (let i = 0; i < (m.w * m.h) / 90; i++) {
+  if (!floor) for (let i = 0; i < (m.w * m.h) / 90; i++) { // the vinyl's speckle
     g.fillStyle = r() < 0.5 ? 'rgba(255,255,255,.05)' : 'rgba(0,0,0,.07)';
     g.fillRect(m.x + r() * m.w, m.y + r() * m.h, 1, 1);
   }
@@ -220,6 +225,10 @@ function buildBoard() {
   for (let qb = 0; qb <= M.w; qb++) for (let l = 0; l < M.h; l++) {
     if (!flat(cellAt(l, qb - 1)) && !flat(cellAt(l, qb))) continue;
     const a = corner(l, qb), b = corner(l + 1, qb); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y);
+  }
+  if (floor) { // on stone the grid needs to stand out more: a dark groove under a pale line, like chalk on terrain
+    g.save(); g.strokeStyle = 'rgba(0,0,0,.42)'; g.lineWidth = Math.max(2, c * 0.04); g.stroke(); g.restore();
+    g.strokeStyle = 'rgba(240,232,212,.42)';
   }
   g.stroke();
 

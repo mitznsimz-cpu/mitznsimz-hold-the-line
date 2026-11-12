@@ -186,6 +186,7 @@ window.HTL_VIEW = Object.freeze({
     draws: drawCount, sprites: Object.keys(SPR).length, monsterTypes: Object.keys(PACK.monsters).length, adaptOff: !!pace.off,
     phase: S ? S.phase : null, battle: S ? S.battle : null, started, paused, time: S ? S.time : 0,
     motes: motes ? { kind: motes.kind, n: motes.seeds.length } : null,
+    floor: floorPat,
     lit: { on: !!SET.lit, standing: Object.values(SPR).filter(s => /\|lit$/.test(s.key)).length, poses: [...SPRP.values()].filter(p => p && p.lit).length, waiting: toLight.length } }),
   speed: n => { speed = n; }
 });

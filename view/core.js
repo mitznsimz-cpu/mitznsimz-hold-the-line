@@ -22,7 +22,7 @@ const TICK = 0.05;
 const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 // table settings, one viewer's own: sound, motion, and every effect that can be switched off
 const SET_KEY = 'htl-settings-v1';
-const SET_DEFAULT = { sound: true, volume: 0.7, motion: reduceMotion ? 'reduced' : 'full', hitstop: true, tumble: true, bits: true, paws: true, torch: true, poses: true, motes: true, lit: true };
+const SET_DEFAULT = { sound: true, volume: 0.7, motion: reduceMotion ? 'reduced' : 'full', hitstop: true, tumble: true, bits: true, paws: true, torch: true, poses: true, motes: true, lit: true, floors: true };
 const SET = (() => { try { return Object.assign({}, SET_DEFAULT, JSON.parse(localStorage.getItem(SET_KEY) || '{}')); } catch (e) { return Object.assign({}, SET_DEFAULT); } })();
 function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) { /* not remembered: fine */ } }
 const calm = () => SET.motion === 'reduced';
@@ -36,7 +36,7 @@ const matOf = sp => (sp.stone ? 'stone' : materialOf(sp.type));
 const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
   barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
 const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-const VERSION = '1.9.1'; // shown in the credits, so testers can say which version they were playing
+const VERSION = '1.9.2'; // shown in the credits, so testers can say which version they were playing
 const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
 const cv = $('board'), ctx = cv.getContext('2d');

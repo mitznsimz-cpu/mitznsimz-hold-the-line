@@ -1498,6 +1498,17 @@ test('every battle has a theme the page has motes for, and every theme names a k
   for (const [t, [kind, col]] of Object.entries(M.MOTE_THEMES)) { assert.ok(M.MOTE_KINDS[kind], t + ': no mote called ' + kind); assert.ok(/^#[0-9a-f]{6}$/i.test(col), t + ': colour'); }
 });
 
+test('every battle\'s theme has a floor: a Delve zone or one of the house\'s own, made of a material the Delve can bake', () => {
+  const box = { window: {} }; box.window = box; vm.createContext(box);
+  vm.runInContext(read('msdd_materials.js'), box);
+  const F = vm.runInContext(read('view/floors.js') + '\n;({ HOUSE_FLOORS })', box), Mat = box.MSDDMat;
+  for (const b of packAsWritten().battles) {
+    const z = F.HOUSE_FLOORS[b.theme] || Mat.ZONES[b.theme];
+    assert.ok(z && Mat.MATS[z.floor], b.id + ': no floor for the theme ' + b.theme);
+    assert.ok(z.stone.length === 3 && z.stone.every(c => /^#[0-9a-f]{6}$/i.test(c)), b.id + ': floor colours');
+  }
+});
+
 // ---------- offline ----------
 test('the offline worker keeps every file the page loads, and only those', () => {
   const page = read('index.html'), sw = read('sw.js');
@@ -1597,7 +1608,7 @@ test('every monster card says what each of its traits does', () => {
 
 // ---------- coverage: every mini fights somewhere ----------
 test('the page loads the shared minis, then the pack, then the rules, then the game', () => {
-  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'simz.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/motes.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
+  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'simz.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/motes.js', 'view/floors.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
   assert.ok(order.every(i => i > 0), 'a script tag is missing: ' + order);
   assert.ok(order.every((i, k) => !k || i > order[k - 1]), 'scripts load out of order');
   assert.ok(!/MINI CORE START/.test(page), 'the page should load mitznsimz_minis.js, not carry a copy');

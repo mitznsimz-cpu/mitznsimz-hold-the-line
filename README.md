@@ -91,6 +91,7 @@ The page loads its scripts in this order:
 | `mitznsimz_minis.js` | The shared minis library (core 2.5.0), with Hold the Line's adapter at the end, which also lights the board's minis (after the Delve's relief lighting) |
 | `motion.js` | How the minis move, and the effects between them: arrows, spells, hit-stop, particles, the tumbling d20, the cats' paws (1.1.0) |
 | `sound.js` | Sound, all made in the browser; no audio files (1.0.0) |
+| `msdd_materials.js` | The Dungeon Delve's materials and zones, copied across as it is: the themed floors bake from it |
 | `pack-core.js` | Content: heroes, paths, monsters, maps, battles, items |
 | `sim.js` | The rules engine: placement, combat, traits (`TRAITS`), the events it sends (`EVENTS`), suggested parties |
 | `simz.js` | Simz, the cats' own player: the Auto button, the balance tests and the keeper in Reverse. He reaches the rules only through `HTL`, and `HTL.look` for questions about the board |
@@ -100,6 +101,7 @@ The page loads its scripts in this order:
 | `view/board.js` | The board's pieces: the mat, the pillars, and the minis as sprites with their poses |
 | `view/events.js` | Each event from the rules becomes animation, sound and words on the board |
 | `view/draw.js` | Drawing the board each frame, in depth order, with the effects on top |
+| `view/floors.js` | Each battle's mat laid with stone, cobbles, tiles or boards from its theme: the Delve's materials baked once with WebGL 2, lit, and kept as a picture. Without WebGL 2, the vinyl mat |
 | `view/motes.js` | Dust, drips, embers, spores, leaves or snow drifting over the board, from each battle's theme (after the Delve's particles) |
 | `view/hud.js` | The battle's panels: the initiative track, the HUD and hero tray, the belt, the cats' powers, a mini's card, the next wave |
 | `view/tavern.js` | The Cat & Mouse between battles: the hub and every room, and the common room where a party is picked |
@@ -112,6 +114,7 @@ The rules come first, and they never touch the page. Given a seed, `sim.js` and 
 ### Shared with Dungeon Delve
 
 - **`mitznsimz_minis.js`.** Everything between the `MINI CORE START` and `MINI CORE END` markers is the shared library, and the Dungeon Delve owns the canonical copy. Make changes to figures there, then copy the core block across. To check that the two copies match, run `node tests/minis.test.js mitznsimz_minis.js path/to/delve/mitznsimz_minis.js`.
+- **`msdd_materials.js`.** The Delve owns this one. Copy it across unchanged when it changes there; never edit Hold the Line's copy.
 - **`motion.js`.** Hold the Line owns this one and Dungeon Delve uses it too, so changes need to work in both games.
 
 ## Roadmap and history
