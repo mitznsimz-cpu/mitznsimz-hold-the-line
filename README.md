@@ -106,6 +106,7 @@ The page loads its scripts in this order:
 | `view/hud.js` | The battle's panels: the initiative track, the HUD and hero tray, the belt, the cats' powers, a mini's card, the next wave |
 | `view/tavern.js` | The Cat & Mouse between battles: the hub and every room, and the common room where a party is picked |
 | `view/app.js` | Input, settings and credits, the main loop (with Frame timings and the adaptive sharpness), and boot |
+| `tools/playbot.js` | The play bot: plays the real screen by clicking what a player can, and reports page errors, frozen or stuck battles, impossible numbers and a campaign that changes across a reload. Four short runs are part of the full gate; `node tools/playbot.js --runs 8` for a longer look, `--campaign` to start with the cellar won |
 
 The `view/` files are plain scripts that share one scope: what one declares at the top, the others can use, as when they were a single `game.js`. They load in the order above, and only `app.js` starts anything, so a file may use what a later one declares, but only from inside a function.
 
