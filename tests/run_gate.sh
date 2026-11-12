@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # The release gate, run from anywhere: game tests, minis tests, then (with --full) the balance report and a stall hunt.
 #   tests/run_gate.sh           quick: the game and minis tests (a minute or two)
-#   tests/run_gate.sh --full    everything a release has to pass (a good while longer)
-# Needs Node 18 or later. The playthroughs on a phone and a desktop are done by hand.
+#   tests/run_gate.sh --full    everything a release has to pass: adds balance, a stall hunt and the browser tests
+#                               (a few minutes; the browser tests need Playwright: npm i -D playwright && npx playwright install chromium)
+# Needs Node 18 or later.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -23,6 +24,8 @@ if [ "${1:-}" = "--full" ]; then
   node tests/balance.js all 10
   echo; echo "== Stall hunt =="
   node tests/stalls.js 40
+  echo; echo "== Browser tests =="
+  node tests/browser.test.js "${@:2}"   # skipped if Playwright isn't installed; pass --require to make that a failure
 fi
 
 echo; echo "Gate passed."

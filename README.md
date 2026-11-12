@@ -49,8 +49,8 @@ The only things fetched from the internet are two Google Fonts. If they can't lo
 The tests need Node 18 or later; they were run on Node 22. Running them from anywhere:
 
 ```sh
-bash tests/run_gate.sh          # syntax, 233 game tests and 19 minis tests (about a minute)
-bash tests/run_gate.sh --full   # adds the balance report and a 1,440-game stall hunt (about a minute more)
+bash tests/run_gate.sh          # syntax, the game tests and the minis tests (about a minute)
+bash tests/run_gate.sh --full   # adds the balance report, a 1,440-game stall hunt and the browser tests (a few minutes)
 ```
 
 You can also run each part on its own:
@@ -60,7 +60,10 @@ node tests/hold-the-line.test.js [--quick]   # the rules, every hero, monster an
 node tests/minis.test.js                     # the minis library and Hold the Line's adapter
 node tests/balance.js maze,attic 20          # Simz on all four difficulties, plus a slow builder (battle ids, or "all")
 node tests/stalls.js 40                      # hunts for games that never end (games per battle)
+node tests/browser.test.js [--only menu]     # the game in a real browser, served from a sub-folder as on GitHub Pages
 ```
+
+The browser tests drive Chromium through [Playwright](https://playwright.dev). Install it once with `npm i -D playwright && npx playwright install chromium`; without it they're skipped. They check what the page does rather than how its source is written: the tab, the credits and their links, the support line, menus that stop redrawing the board, the board's pixel budget on Safari and how it adapts to a slow browser, the battle clock, the drawing calls Safari is slow at, and a campaign played to its end. `window.HTL_VIEW` is a small read-only hook they use; the game itself doesn't.
 
 These are the gate a release has to pass:
 
@@ -70,7 +73,8 @@ These are the gate a release has to pass:
 - Simz wins at least 70% on Hard overall;
 - Deadly comes in at 50% or more overall, and no easier than Hard;
 - no stall-hunt game ever stalls;
-- a playthrough on a phone and on a desktop shows no console errors.
+- the browser tests pass, on a desktop and a phone size;
+- a playthrough in Safari, on a Mac and an iPhone or iPad, by hand.
 
 `tests/fixtures/` holds frozen copies of the v1.0, v1.1 and v1.2 rules. The battles from those versions must still replay exactly, seed for seed, so their waves and maps don't change.
 
