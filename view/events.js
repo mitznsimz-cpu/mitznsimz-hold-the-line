@@ -102,13 +102,33 @@ function onEvent(ev) {
       V.pops.push({ t0: ev.t + 0.1, lane: ev.lane, sq: ev.sq, ht: 0.9, kind: 'label', text: HTL.THROWS[ev.kind].name.toUpperCase(), col: '#f0cd6e', slot: -1 });
       sfx(ev.kind === 'net' || ev.kind === 'ballBearings' ? 'clack' : 'crack', 0.7); break;
     }
-    case 'trapHit': case 'thorns': case 'acid': case 'scorch': case 'splash': {
+    case 'windup': { // a boss rears back: a pulsing ! over it until the blow lands or comes apart
+      const sp = V.sprites.get(ev.id); if (!sp) break;
+      sp.windup = ev.t; sp.anims.push({ k: 'cast', t0: ev.t, dur: 0.6 });
+      V.pops.push({ t0: ev.t, lane: sp.lane, sq: sp.sq, ht: sp.ht, kind: 'label', text: 'WINDING UP', col: '#f0cd6e' });
+      if (!V.windupTold) { V.windupTold = true; hint('A boss is winding up a crushing blow for the heroes in front of it. Hurt it hard, or pounce on it, to break it.', 4200, 'Wind-up'); }
+      break;
+    }
+    case 'stagger': {
+      const sp = V.sprites.get(ev.id); if (!sp) break;
+      sp.windup = 0; sp.anims.push({ k: 'shake', t0: ev.t, dur: 0.4 });
+      V.pops.push({ t0: ev.t, lane: sp.lane, sq: sp.sq, ht: sp.ht, kind: 'label', text: ev.why === 'hurt' ? 'STAGGERED' : 'BROKEN OFF', col: '#a9cdf0' });
+      break;
+    }
+    case 'unleash': { // the blow lands down the row in front of it
+      const sp = V.sprites.get(ev.id); if (!sp) break;
+      sp.windup = 0; sp.anims.push({ k: 'strike', t0: ev.t, dur: 0.45 });
+      for (let q = ev.sq - 1, i = 0; q >= Math.max(0, ev.sq - 3); q--, i++) V.fx.push({ k: 'boom', t0: ev.t + 0.12 + i * 0.05, dur: 0.45, lane: ev.lane, sq: q });
+      shake(1.6);
+      break;
+    }
+    case 'trapHit': case 'thorns': case 'acid': case 'scorch': case 'splash': case 'crushed': {
       const sp = V.sprites.get(ev.to || ev.id); if (!sp) break;
       const at = ev.t + 0.12;
       V.impacts.push({ at, fn: () => {
         if (ev.dmg > 0) { sp.anims.push({ k: 'shake', t0: at, dur: 0.3 }, { k: 'flash', t0: at, dur: 0.2 }); sp.dispHp = Math.max(0, sp.dispHp - ev.dmg); }
         const sk = ev.type === 'splash' ? ev.kind : '', acid = ev.type === 'acid' || sk === 'acid';
-        const word = ev.type === 'scorch' ? (ev.saved ? ' (SAVED)' : ' FIRE') : acid ? ' ACID' : sk === 'holyWater' ? ' HOLY' : ev.type === 'thorns' ? ' THORNS' : '';
+        const word = ev.type === 'crushed' ? ' CRUSHED' : ev.type === 'scorch' ? (ev.saved ? ' (SAVED)' : ' FIRE') : acid ? ' ACID' : sk === 'holyWater' ? ' HOLY' : ev.type === 'thorns' ? ' THORNS' : '';
         if (ev.dmg > 0 || ev.kind !== 'bearings') V.pops.push({ t0: at, lane: sp.lane, sq: sp.sq, ht: sp.ht, kind: 'label', text: '−' + ev.dmg + word, col: acid ? '#9fd68c' : sk === 'holyWater' ? '#f0cd6e' : '#f2a46b' });
         if (ev.killed) killSprite(sp, at, sp.id % 2 ? 1 : -1);
       } });

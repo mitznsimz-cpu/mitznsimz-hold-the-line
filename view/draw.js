@@ -46,7 +46,7 @@ function draw(now) {
   if (L.dark) shadeAll(list);
   for (const st of list) if (!st.pillar) drawShadow(st);
   prof.mark('shadows');
-  for (const st of list) if (st.pillar) drawPillar(st, list); else { drawSprite(st); if (st.sp.level > 1 && !st.sp.dead) drawLevel(st); }
+  for (const st of list) if (st.pillar) drawPillar(st, list); else { drawSprite(st); if (st.sp.level > 1 && !st.sp.dead) drawLevel(st); if (st.sp.windup && !st.sp.dead) drawWindup(st, now); }
   prof.mark('minis');
   drawGlows(list);
   drawTorches();
@@ -61,6 +61,15 @@ function draw(now) {
   prof.mark('effects');
 }
 
+// a boss winding up: a pulsing gold ! over its head until the blow lands or comes apart
+function drawWindup(st, now) {
+  const c = L.cell, k = calm() ? 0.85 : 0.75 + 0.25 * Math.sin((now - st.sp.windup) * 9), r = c * 0.22 * k;
+  const x = st.gx + c * 0.36, y = st.gy - c * ((st.sp.ht || 0.9) * 0.85) - st.lift * c * 0.2; // beside its head, clear of the words over it
+  ctx.fillStyle = 'rgba(20,12,6,.75)'; ctx.beginPath(); ctx.arc(x, y, r * 1.25, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#f0cd6e'; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#2a1608'; ctx.font = '800 ' + Math.round(r * 1.5) + 'px ' + 'system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('!', x, y + r * 0.08);
+}
 const live = new Map(); // the sim's units by id, refreshed every frame
 function drawShadow(st) {
   const c = L.cell, k = (1 - clamp(st.lift, 0, 1.5) * 0.35) * st.scale, rx = st.sp.rx * 1.1;

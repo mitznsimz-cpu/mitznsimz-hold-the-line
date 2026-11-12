@@ -1247,6 +1247,55 @@ test('young red dragon: breathes fire down its whole row, a save for half', () =
   const sc = events(s, 'scorch'); assert.ok(events(s, 'breath').length === 1 && sc.length === 2 && !sc.some(e => e.to === other.id));
   void a; void b;
 });
+// boss wind-ups (v1.9.4)
+function windupArena() {
+  const s = bare(), boss = tough(put(s, 'monster', 'goblinChief', 2, 5)); boss.turns = HTL.WINDUP.first - 1;
+  const near = tough(put(s, 'hero', 'fighter', 2, 4)), far = tough(put(s, 'hero', 'ranger', 2, 0)), beside = tough(put(s, 'hero', 'fighter', 1, 4));
+  return { s, boss, near, far, beside };
+}
+const roundUntil = (s, type, max) => { for (let i = 0; i < (max || 6) && !events(s, type).length; i++) stepRounds(s, 1); return events(s, type); };
+test('boss wind-up: a boss winds up instead of attacking, and the blow lands next turn on the heroes in front of it within reach', () => {
+  const { s, boss, near, far, beside } = windupArena();
+  const w = roundUntil(s, 'windup');
+  assert.strictEqual(w.length, 1); assert.strictEqual(w[0].id, boss.id);
+  assert.ok(!events(s, 'attack').some(e => e.from === boss.id && e.t >= w[0].t), 'winding up is its whole turn');
+  const u = roundUntil(s, 'unleash'), hit = events(s, 'crushed');
+  assert.strictEqual(u.length, 1);
+  assert.strictEqual(JSON.stringify(hit.map(e => e.to)), JSON.stringify([near.id]), 'the hero in front, not one out of reach behind or one in the next row');
+  assert.ok(hit[0].dmg >= 1); void far; void beside;
+});
+test('boss wind-up: hurting the boss hard before the blow lands staggers it, and the blow never comes', () => {
+  const { s, boss } = windupArena();
+  roundUntil(s, 'windup');
+  boss.hp -= Math.ceil(HTL.WINDUP.stagger * boss.maxHp);
+  stepRounds(s, 2);
+  const st = events(s, 'stagger');
+  assert.ok(st.length === 1 && st[0].why === 'hurt', JSON.stringify(st));
+  assert.strictEqual(events(s, 'unleash').length, 0);
+});
+test('boss wind-up: a stunned boss loses the moment (Mitz\'s pounce breaks it)', () => {
+  const s = HTL.newGame(7, 'warren', { cats: { duty: 'mitz' } }); s.nextWaveRound = 1e9;
+  const boss = tough(put(s, 'monster', 'goblinChief', 2, 5)); boss.turns = HTL.WINDUP.first - 1; tough(put(s, 'hero', 'fighter', 2, 4));
+  roundUntil(s, 'windup');
+  s.powers.pounce.ready = 0;
+  assert.strictEqual(HTL.usePower(s, 'pounce', boss.lane, boss.sq), null);
+  stepRounds(s, 3);
+  assert.strictEqual(events(s, 'unleash').length, 0, 'the blow never lands');
+  assert.ok(events(s, 'stagger').some(e => e.why === 'stunned'));
+});
+test('boss wind-up: nothing to wind up for with no hero in front, and ordinary monsters never do', () => {
+  const s = bare(), boss = tough(put(s, 'monster', 'goblinChief', 2, 5)); boss.turns = HTL.WINDUP.first - 1; tough(put(s, 'hero', 'fighter', 1, 4));
+  const g = tough(put(s, 'monster', 'goblin', 3, 5)); g.turns = HTL.WINDUP.first - 1; tough(put(s, 'hero', 'fighter', 3, 4));
+  stepRounds(s, 6);
+  assert.strictEqual(events(s, 'windup').length, 0);
+});
+test('Simz pounces on a boss that is winding up', () => {
+  const s = HTL.newGame(7, 'warren', { cats: { duty: 'mitz' } }); s.nextWaveRound = 1e9;
+  const boss = tough(put(s, 'monster', 'goblinChief', 2, 5)); boss.turns = HTL.WINDUP.first - 1; tough(put(s, 'hero', 'fighter', 2, 4));
+  roundUntil(s, 'windup'); s.powers.pounce.ready = 0; s.events.length = 0;
+  HTL.autoplay(s);
+  assert.ok(events(s, 'pounce').some(e => e.ids.indexOf(boss.id) >= 0), 'Simz pounced on the boss');
+});
 test('every new hero can reach level 3 on either path', () => {
   for (const ty of ['paladin', 'druid', 'monk', 'warlock', 'sorcerer', 'tinker']) for (const path of Object.keys(HTL.PATHS[ty])) {
     const s = bare(); s.gold = 9999; HTL.place(s, ty, 2, 1); const u = HTL.unitAt(s, 2, 1);
