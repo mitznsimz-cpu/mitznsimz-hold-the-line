@@ -1490,6 +1490,54 @@ test('every monster is written out with named fields, all of them present and th
   assert.ok(!/\bM\(|\bA\(/.test(read('pack-core.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'no positional helpers left in the pack');
 });
 
+// ---------- the trait registry ----------
+test('every trait in the pack is in the registry, and every registry entry is used by some monster', () => {
+  const used = new Set();
+  for (const [id, m] of Object.entries(packAsWritten().monsters)) for (const k of Object.keys(m.traits)) {
+    assert.ok(HTL.TRAITS[k], id + ' has the trait "' + k + '", which the registry in sim.js does not list');
+    used.add(k);
+  }
+  for (const k of Object.keys(HTL.TRAITS)) {
+    assert.ok(used.has(k), 'no monster has the trait "' + k + '"');
+    assert.ok(typeof HTL.TRAITS[k].where === 'string' && HTL.TRAITS[k].where.length > 3, k + ' says where its rules are');
+  }
+});
+test('every trait the rules or the page look up is in the registry', () => {
+  const files = ['sim.js', 'modes.js', 'campaign.js'].concat(fs.readdirSync(path.join(dir, 'view')).map(f => 'view/' + f));
+  for (const f of files) {
+    const src = read(f), re = /traits\([^()]*\)\.(\w+)|\.traits\.(\w+)/g; let m;
+    while ((m = re.exec(src))) { const k = m[1] || m[2]; assert.ok(HTL.TRAITS[k], f + ' looks up the trait "' + k + '", which the registry does not list'); }
+  }
+  // and while battles run: every lookup on a monster's traits, however the rules reach them
+  const read_ = new Set(), saved = {};
+  for (const [id, m] of Object.entries(HTL.MONSTERS)) {
+    saved[id] = m.traits;
+    m.traits = new Proxy(m.traits, { get(o, k) { if (typeof k === 'string') read_.add(k); return o[k]; } });
+  }
+  try {
+    const ids = HTL.BATTLES.map(b => b.id).concat(['rush:1', 'endless:3', 'puzzle:0', 'puzzle:1']);
+    for (const id of ids) {
+      const s = HTL.newGame(11, id); let last = -1, g = 0;
+      while (s.phase === 'running' && g++ < 60000) { if (s.round !== last) { last = s.round; HTL.autoplay(s); } HTL.step(s, 0.1); s.events.length = 0; }
+    }
+    for (const t of Object.keys(HTL.MONSTERS)) HTL.describe(t);
+  } finally { for (const id of Object.keys(saved)) HTL.MONSTERS[id].traits = saved[id]; }
+  const odd = [...read_].filter(k => !HTL.TRAITS[k] && !['toJSON', 'constructor', 'hasOwnProperty'].includes(k));
+  assert.deepStrictEqual(odd, [], 'the rules read traits the registry does not list');
+  assert.ok(read_.size >= 25, 'the battles read only ' + read_.size + ' traits; is the check still watching?');
+});
+test('every monster card says what each of its traits does', () => {
+  for (const [id, m] of Object.entries(HTL.MONSTERS)) {
+    const card = HTL.describe(id);
+    for (const [k, v] of Object.entries(m.traits)) {
+      const tx = HTL.TRAITS[k] && HTL.TRAITS[k].text;
+      if (!v || !tx) continue;
+      const line = typeof tx === 'function' ? tx(v, id) : tx;
+      assert.ok(card.includes(line), id + '’s card leaves out ' + k);
+    }
+  }
+});
+
 // ---------- coverage: every mini fights somewhere ----------
 test('the page loads the shared minis, then the pack, then the rules, then the game', () => {
   const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));

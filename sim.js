@@ -112,6 +112,51 @@ var HTL = (function (P) {
   function emit(s, ev) { ev.t = s.now; s.events.push(ev); return ev; }
   const NO_TRAITS = {};
   function traits(u) { return u.kind === 'monster' ? MONSTERS[u.type].traits : NO_TRAITS; }
+  /* Every monster trait, in one place: what it says on the monster's card (text, or a function of its value) and where
+     the rules act on it. A new trait is an entry here, then its rule: an entry in one of the hook lists (TURN_START,
+     BEFORE_ACT, ARMOUR, ON_LANDED, WHEN_STRUCK, AFTER_HIT, AFTER_WOUND, ON_HURT) where it can be, or the named rule
+     where it can't. The tests check that every trait in the pack and every one the rules read is listed here.
+     The order is the order the card lists them in. */
+  const TRAITS = {
+    boss:         { text: 'Boss', where: 'not shoved back, not frightened; Simz plans for it' },
+    undead:       { text: 'Undead', where: 'holy ground, sunlight, Sacred Flame and Smite do double, a Mace of Disruption' },
+    flying:       { text: 'Flies over the first hero in its way, and over pits', where: 'monsterAct: moving; not slowed by water or ice; no traps' },
+    multi:        { text: 'Attacks twice a turn', where: 'monsterAct: attacking' },
+    resist:       { text: 'Takes half damage from weapons, full damage from spells', where: 'ARMOUR' },
+    regen:        { text: v => 'Heals ' + v + ' hit points a turn', where: 'TURN_START: regenerate' },
+    soak:         { text: v => 'Heals ' + v + ' hit points a turn while it stands in water or the well', where: 'TURN_START: regenerate' },
+    drain:        { text: 'Heals itself with half the damage it deals', where: 'AFTER_HIT' },
+    paralyse:     { text: 'Its hits can paralyse a hero for a turn', where: 'AFTER_WOUND' },
+    split:        { text: 'Splits in two when badly hurt', where: 'ON_HURT' },
+    summon:       { text: (v, type) => v.type === type ? 'Kindles another of its kind' : 'Calls up a ' + MONSTERS[v.type].name.toLowerCase() + ' every third turn', where: 'BEFORE_ACT: callHelp' },
+    mend:         { text: 'Heals the monsters around it', where: 'BEFORE_ACT: mendNearby' },
+    burrow:       { text: 'Burrows under the first hero in its way', where: 'monsterAct: moving; springs traps where it comes up' },
+    surface:      { text: 'Badly hurt, it dives under the lawn and comes up through a molehill further on', where: 'ON_HURT: dive; spawnDue carries its wounds' },
+    shieldwall:   { text: 'Arrows at monsters behind it go wide', where: 'attack: cover for the monsters behind' },
+    invisible:    { text: 'Invisible unless a Cleric, a Paladin or holy water is near', where: 'seen()' },
+    unhorse:      { text: 'Becomes a goblin and a wolf when badly hurt', where: 'ON_HURT' },
+    fireStops:    { text: 'Fire stops it healing for a turn', where: 'AFTER_WOUND: burn; TURN_START: regenerate' },
+    radiantStops: { text: 'Radiant light stops it healing for a turn', where: 'AFTER_WOUND: burn; holy ground; sunlight; TURN_START: regenerate' },
+    engulf:       { text: 'Swallows a hero whole and carries it', where: 'AFTER_WOUND; heroAct: inside' },
+    rust:         { text: 'Its touch rusts armour away', where: 'AFTER_WOUND' },
+    gaze:         { text: 'Its gaze turns heroes to stone', where: 'BEFORE_ACT' },
+    charm:        { text: 'Charms heroes into attacking their friends', where: 'BEFORE_ACT' },
+    raiseDead:    { text: 'Monsters that fall near it get back up', where: 'died()' },
+    rot:          { text: v => 'Its touch rots: a hero it hits can’t be healed for ' + v + ' rounds', where: 'ON_LANDED' },
+    fireWeak:     { text: 'Fire does double damage to it', where: 'fireOn()' },
+    fireImmune:   { text: 'Fire does nothing to it', where: 'fireOn(); the belt' },
+    shell:        { text: 'A hard shell: arrows and bolts do half damage', where: 'ARMOUR' },
+    amphibious:   { text: 'Water doesn’t slow it', where: 'monsterAct: moving' },
+    lash:         { text: 'Its tongue reaches past the first hero to the one behind', where: 'monsterAct: attacking' },
+    rises:        { text: 'Gets back up once, unless the blow was holy or a critical hit', where: 'attack: after the damage' },
+    plate:        { text: v => 'Every hit on it does ' + v + ' less damage, but spells hit fully', where: 'ARMOUR' },
+    disguise:     { text: 'Turns up as a treasure chest in the middle of the mat, and wakes when a hero comes close', where: 'spawnDue; monsterAct: dormant' },
+    adhesive:     { text: 'Sticky: a hero it hits loses its next turn', where: 'ON_LANDED' },
+    heated:       { text: 'Hot to the touch: heroes who hit it up close take fire damage', where: 'WHEN_STRUCK' },
+    breath:       { text: 'Breathes fire down a whole row', where: 'BEFORE_ACT' },
+    small:        { text: null, where: 'crowded battles: three can share a square' },
+    fiend:        { text: null, where: 'holy water; the belt' }
+  };
   function battle(s) { return BATTLE_BY_ID[s.battle] || makeBattle(s.battle) || BATTLES[0]; }
   function mapOf(s) { return MAP_BY_ID[battle(s).map]; }
   function cellAt(s, lane, sq) { const m = mapOf(s); return lane >= 0 && lane < m.h && sq >= 0 && sq < m.w ? m.rows[lane][sq] : ' '; }
@@ -983,6 +1028,18 @@ var HTL = (function (P) {
       return true;
     }
   ];
+  const ARMOUR = [ // the target's, against a hero's blow: the damage left after it, or undefined if it takes the lot
+    function resist(s, a, t, atk, dmg) { if (a.kind === 'hero' && !atk.magic && traits(t).resist) return Math.max(1, Math.floor(dmg / 2)); },
+    function shell(s, a, t, atk, dmg) { if (a.kind === 'hero' && atk.kind === 'ranged' && !atk.magic && traits(t).shell) return Math.max(1, Math.floor(dmg / 2)); }, // a crab's shell
+    function plate(s, a, t, atk, dmg) { if (a.kind === 'hero' && !atk.magic && traits(t).plate) return Math.max(1, dmg - traits(t).plate); } // animated armour
+  ];
+  const WHEN_STRUCK = [ // the target's, when a blow lands on it, after the blow is reported
+    function heated(s, a, t, atk) { if (a.kind === 'hero' && atk.kind !== 'ranged' && traits(t).heated && a.alive && !isObject(a)) scald(s, a, t); }
+  ];
+  const ON_LANDED = [ // the attacker's, when a monster's blow wounds a hero, before anything else follows from it
+    function rot(s, a, t) { if (traits(a).rot) addStatus(s, t, 'rotting', traits(a).rot, a); },
+    function adhesive(s, a, t) { if (traits(a).adhesive && t.alive) addStatus(s, t, 'stuck', 1, a); }
+  ];
   const AFTER_HIT = [ // the attacker's, when its blow lands
     function drain(s, a, t, dmg) {
       if (!traits(a).drain || !a.alive || a.hp >= a.maxHp || dmg < 2) return;
@@ -1150,9 +1207,7 @@ var HTL = (function (P) {
       dmg = Math.max(1, dmg);
       if (smite) dmg += dice(s, smite.n * (crit ? 2 : 1) * (traits(t).undead ? 2 : 1), smite.d);
       if (a.kind === 'hero' && traits(t).undead) dmg += itemBonus(a, 'undead'); // a Mace of Disruption
-      if (a.kind === 'hero' && !atk.magic && traits(t).resist) { dmg = Math.max(1, Math.floor(dmg / 2)); resisted = true; }
-      if (a.kind === 'hero' && atk.kind === 'ranged' && !atk.magic && traits(t).shell) { dmg = Math.max(1, Math.floor(dmg / 2)); resisted = true; } // a crab's shell
-      if (a.kind === 'hero' && !atk.magic && traits(t).plate) { dmg = Math.max(1, dmg - traits(t).plate); resisted = true; } // animated armour
+      for (const hook of ARMOUR) { const left = hook(s, a, t, atk, dmg); if (left !== undefined) { dmg = left; resisted = true; } }
       if (t.type === 'monk' && atk.kind === 'ranged' && !atk.magic && t.kind === 'hero') { // Deflect Missiles
         const df = HEROES.monk.deflect;
         deflected = dice(s, df.n, df.d) + df.mod + (t.level - 1); dmg = Math.max(0, dmg - deflected);
@@ -1165,11 +1220,8 @@ var HTL = (function (P) {
     emit(s, { type: 'attack', from: a.id, to: t.id, side: a.kind, kind: atk.kind, fx: atk.fx, name: atk.name,
       roll, low, bonus, total, ac, hit, crit, fumble, dmg, killed, resisted, holy, sneak: !!atk.sneak, high, cut, walled, smite: !!smite, deflected });
     if (rose) emit(s, { type: 'rise', id: t.id, hp: t.hp });
-    if (hit && a.kind === 'hero' && atk.kind !== 'ranged' && traits(t).heated && a.alive && !isObject(a)) scald(s, a, t);
-    if (hit && dmg && !killed && a.kind === 'monster' && t.kind === 'hero') {
-      if (traits(a).rot) addStatus(s, t, 'rotting', traits(a).rot, a);
-      if (traits(a).adhesive && t.alive) addStatus(s, t, 'stuck', 1, a);
-    }
+    if (hit) for (const hook of WHEN_STRUCK) hook(s, a, t, atk);
+    if (hit && dmg && !killed && a.kind === 'monster' && t.kind === 'hero') for (const hook of ON_LANDED) hook(s, a, t);
     if (!hit) return MISS;
     if (a.path === 'thief') { s.gold += 2; s.stats.pocketed += 2; emit(s, { type: 'pocket', id: a.id, amount: 2 }); }
     if (!dmg) return MISS; // caught in mid-air
@@ -1807,44 +1859,12 @@ var HTL = (function (P) {
     const st = MONSTERS[type];
     if (!st) return HEROES[type] ? HEROES[type].info : '';
     const t = st.traits, a = st.attack, bits = [];
-    if (t.boss) bits.push('Boss');
-    if (t.undead) bits.push('Undead');
+    const say = k => { const tx = TRAITS[k].text, v = t[k]; if (v && tx) bits.push(typeof tx === 'function' ? tx(v, type) : tx); };
+    say('boss'); say('undead');
     if (a.range > 1) bits.push((a.kind === 'ranged' ? 'Attacks from ' : 'Reaches ') + a.range + ' squares away');
-    if (t.flying) bits.push('Flies over the first hero in its way, and over pits');
+    say('flying');
     if (st.speed >= 1.5) bits.push('Fast: can move two squares a turn');
-    if (t.multi) bits.push('Attacks twice a turn');
-    if (t.resist) bits.push('Takes half damage from weapons, full damage from spells');
-    if (t.regen) bits.push('Heals ' + t.regen + ' hit points a turn');
-    if (t.soak) bits.push('Heals ' + t.soak + ' hit points a turn while it stands in water or the well');
-    if (t.drain) bits.push('Heals itself with half the damage it deals');
-    if (t.paralyse) bits.push('Its hits can paralyse a hero for a turn');
-    if (t.split) bits.push('Splits in two when badly hurt');
-    if (t.summon) bits.push(t.summon.type === type ? 'Kindles another of its kind' : 'Calls up a ' + MONSTERS[t.summon.type].name.toLowerCase() + ' every third turn');
-    if (t.mend) bits.push('Heals the monsters around it');
-    if (t.burrow) bits.push('Burrows under the first hero in its way');
-    if (t.surface) bits.push('Badly hurt, it dives under the lawn and comes up through a molehill further on');
-    if (t.shieldwall) bits.push('Arrows at monsters behind it go wide');
-    if (t.invisible) bits.push('Invisible unless a Cleric, a Paladin or holy water is near');
-    if (t.unhorse) bits.push('Becomes a goblin and a wolf when badly hurt');
-    if (t.fireStops) bits.push('Fire stops it healing for a turn');
-    if (t.radiantStops) bits.push('Radiant light stops it healing for a turn');
-    if (t.engulf) bits.push('Swallows a hero whole and carries it');
-    if (t.rust) bits.push('Its touch rusts armour away');
-    if (t.gaze) bits.push('Its gaze turns heroes to stone');
-    if (t.charm) bits.push('Charms heroes into attacking their friends');
-    if (t.raiseDead) bits.push('Monsters that fall near it get back up');
-    if (t.rot) bits.push('Its touch rots: a hero it hits can’t be healed for ' + t.rot + ' rounds');
-    if (t.fireWeak) bits.push('Fire does double damage to it');
-    if (t.fireImmune) bits.push('Fire does nothing to it');
-    if (t.shell) bits.push('A hard shell: arrows and bolts do half damage');
-    if (t.amphibious) bits.push('Water doesn’t slow it');
-    if (t.lash) bits.push('Its tongue reaches past the first hero to the one behind');
-    if (t.rises) bits.push('Gets back up once, unless the blow was holy or a critical hit');
-    if (t.plate) bits.push('Every hit on it does ' + t.plate + ' less damage, but spells hit fully');
-    if (t.disguise) bits.push('Turns up as a treasure chest in the middle of the mat, and wakes when a hero comes close');
-    if (t.adhesive) bits.push('Sticky: a hero it hits loses its next turn');
-    if (t.heated) bits.push('Hot to the touch: heroes who hit it up close take fire damage');
-    if (t.breath) bits.push('Breathes fire down a whole row');
+    for (const k of Object.keys(TRAITS)) if (k !== 'boss' && k !== 'undead' && k !== 'flying') say(k);
     if (a.extra && !t.charm && !t.burrow) bits.push('Poisonous bite');
     if (!bits.filter(b => b !== 'Boss' && b !== 'Undead').length) bits.push(st.speed <= 0.5 ? 'Slow and heavy' : 'Walks straight at your line');
     return bits.join('. ') + '.';
@@ -1898,7 +1918,7 @@ var HTL = (function (P) {
   const lastWave = b => (b.endless ? Infinity : b.waves.length - 1);
 
   const PACK = { id: P.id, name: P.name, heroes: HEROES, monsters: MONSTERS, battles: BATTLES, maps: MAP_BY_ID, parts: P.parts || {} };
-  return { ROUND, PACK, HEROES, MONSTERS, BATTLES, MAPS: MAP_BY_ID, STATUSES, PATHS, DIFFICULTY, PARTY, HERO_TYPES, DEFENDER_TYPES, TAVERN, tavernOf, ITEMS, POWERS, usePower, powerTargets, itemOf, _heroAttack: heroAttack, trapAt,
+  return { ROUND, PACK, TRAITS, HEROES, MONSTERS, BATTLES, MAPS: MAP_BY_ID, STATUSES, PATHS, DIFFICULTY, PARTY, HERO_TYPES, DEFENDER_TYPES, TAVERN, tavernOf, ITEMS, POWERS, usePower, powerTargets, itemOf, _heroAttack: heroAttack, trapAt,
     newGame, step, place, canPlace, recall, refundOf, preview, levelUp, upgradeCost, suggestLoadout, unitAt, addUnit, slot, battle, mapOf, cellAt, describe, autoplay, parseSpawns,
     addStatus, hasStatus, nearestAhead, heroInReach,
     battleById: id => makeBattle(id), addMaker, waveOf, send, canSend, sendCost, SEND, THROWS, throwItem, canThrow,
