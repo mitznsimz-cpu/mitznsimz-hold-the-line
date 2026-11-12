@@ -149,6 +149,39 @@ test('the support line is on the tavern screen, and not when the tavern is opene
   await page.ctx.close();
 });
 
+test('every room of the tavern opens, and every game in the back room starts, with no errors', async () => {
+  const page = await open({ w: 1280, h: 800, campaign: true });
+  const rooms = await page.evaluate(() => [...document.querySelectorAll('#overlay .room[data-room]:not([disabled])')].map(b => b.dataset.room));
+  assert(rooms.length >= 6, 'rooms open in a full campaign: ' + rooms.join(', '));
+  for (const r of rooms) {
+    await page.click('.room[data-room="' + r + '"]');
+    assert(await page.evaluate(() => !document.getElementById('overlay').hidden && !!document.getElementById('ovTitle')), 'the ' + r + ' did not open');
+    await page.reload(); await page.waitForFunction(() => window.HTL_VIEW);
+  }
+  await page.click('.room[data-room="games"]');
+  const modes = await page.evaluate(() => [...document.querySelectorAll('#overlay .room[data-mode]')].map(b => b.dataset.mode));
+  assert(modes.length >= 5, 'games in the back room: ' + modes.join(', '));
+  for (const m of modes) {
+    await page.click('.room[data-mode="' + m + '"]');
+    const started = () => page.evaluate(() => window.HTL_VIEW.info().started);
+    for (let i = 0; i < 3 && !(await started()) && !(await page.$('#overlay:not([hidden]) #btnGo')); i++) { // a game may ask one more thing first: take the first offer
+      const next = await page.$('#overlay:not([hidden]) .room:not([disabled]), #overlay:not([hidden]) .battle:not([disabled]), #overlay:not([hidden]) .btnrow button.primary:not([disabled])');
+      if (!next) break; await next.click();
+    }
+    if (!(await started())) { // most games go through the common room; Reverse starts as soon as a cellar is picked
+      const go = await page.$('#overlay:not([hidden]) #btnGo:not([disabled])');
+      assert(go, m + ': no way into a battle');
+      await go.click();
+    }
+    await page.waitForFunction(() => window.HTL_VIEW.info().started, null, { timeout: 5000 });
+    await page.waitForTimeout(1500);
+    await page.reload(); await page.waitForFunction(() => window.HTL_VIEW);
+    await page.click('.room[data-room="games"]');
+  }
+  assert(!page.errors.length, 'errors: ' + page.errors.join(' | '));
+  await page.ctx.close();
+});
+
 /* ---------- menus ---------- */
 test('a menu stops the board redrawing: no blur, it settles, and a resize redraws it once', async () => {
   const page = await open({ w: 1440, h: 900, dpr: 2, campaign: true });
@@ -282,10 +315,16 @@ test('Frame timings show in a battle only when switched on', async () => {
 });
 
 /* ---------- a campaign to its end ---------- */
-test('winning the last battle of the house shows the Ko-fi line; an ordinary win does not', async () => {
+test('winning the last battle of the house shows the Ko-fi line, an ordinary win does not, and every trophy feat is passed on', async () => {
   const page = await open({ w: 1280, h: 800, campaign: true });
+  await page.evaluate(() => { const C = window.HTL_CAMPAIGN, rec = C.record; C.record = function (c, md) { window.__recorded = JSON.parse(JSON.stringify(md)); return rec.apply(this, arguments); }; });
   await battle(page, 'house', 'attic', { diff: 'easy', speed: 8 });
   assert(await playToEnd(page) === 'won', 'Simz lost the Attic on Easy');
+  const asked = new Set([...fs.readFileSync(path.join(ROOT, 'campaign.js'), 'utf8').matchAll(/s\.feats\.(\w+)/g)].map(m => m[1]));
+  const feats = await page.evaluate(() => window.__recorded && window.__recorded.feats);
+  assert(feats, 'the battle handed no feats to the campaign');
+  const missing = [...asked].filter(k => !(k in feats));
+  assert(!missing.length, 'trophy feats never passed on: ' + missing.join(', '));
   assert(/Enjoying it\? Buy Pete some dice/.test(await supportLine(page) || ''), 'no Ko-fi line after the last house battle');
   await page.click('#btnChoose');
   await battle(page, 'cellar', 'warren', { diff: 'easy', speed: 8 });
