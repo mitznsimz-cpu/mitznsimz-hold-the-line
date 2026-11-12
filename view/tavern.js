@@ -470,6 +470,7 @@ const SETTINGS = [
   ['bits', 'Hit effects', 'Sparks off armour, bone chips, stone dust, splats and embers.'],
   ['paws', 'Cats tidy up', 'Mitz and Simz take turns swatting fallen monsters off the table.'],
   ['torch', 'Torchlight', 'Flickering torches, moving shadows, and dark crypts and caves.'],
+  ['lit', 'Lit minis', 'Each mini lit from the top left as a solid figure, with a soft highlight and a warm rim.'],
   ['motes', 'Drifting motes', 'Dust, drips, embers, spores, leaves or snow drifting over each battle, to suit where it is.'],
   ['perf', 'Frame timings', 'Frames a second and where the time goes, in the corner of the screen. Handy for a bug report.']
 ];
@@ -479,6 +480,7 @@ function setSet(key, on) {
   if (key === 'sound') { SND.enabled(on); if (on) { SND.unlock(); SND.play('clack'); } }
   if (key === 'torch' && L) layout(); // a dark battle's floor is part of the board image
   if (key === 'motes') setupMotes();
+  if (key === 'lit' && L) layout(); // the minis are drawn again, lit or not
   saveSettings();
 }
 function toggleSound() { setSet('sound', !SET.sound); hint(SET.sound ? 'Sound on.' : 'Sound off.', 1400); }

@@ -362,14 +362,16 @@ const tipOf = ch => (ch === 'H' && L.map.lawn ? MOLEHILL : ch === 'H' && L.map.s
 // full set came to hundreds of megabytes of canvas, which a browser can be slow to juggle.
 let SPRU = 0;
 function buildSprites() {
-  TableMinis.clearCache(); SPRS.clear(); SPRP.clear(); SPRL.clear();
+  TableMinis.clearCache(); SPRS.clear(); SPRP.clear(); SPRL.clear(); toLight.length = 0; lightGen++;
   for (const k in SPR) delete SPR[k];
   for (const k in SPRW) delete SPRW[k];
   for (const t of Object.keys(PACK.heroes)) if (facesLeft(t)) SPRL.add(t);
   SPRU = L.cell * L.dpr;
 }
+// the board's minis are lit (Settings → Lit minis); the tavern's little line-ups stay as they were
+const boardOpts = (key, more) => Object.assign({}, key === '__bear' ? { faction: 'hero' } : figOpts(key), { lit: !!SET.lit }, more);
 function spr(type) {
-  return SPR[type] || (SPR[type] = type === '__bear' ? TableMinis.sprite('caveBear', SPRU, { faction: 'hero' }) : TableMinis.sprite(figType(type), SPRU, figOpts(type)));
+  return SPR[type] || (SPR[type] = TableMinis.sprite(type === '__bear' ? 'caveBear' : figType(type), SPRU, boardOpts(type)));
 }
 function sprW(type) { return SPRW[type] || (SPRW[type] = TableMinis.flash(spr(type))); }
 
@@ -425,19 +427,42 @@ function spriteState(sp, now) {
 const POSE_OF = { strike: ['strike'], recoil: ['strike'], cast: ['cast', 'breath'], knock: ['hurt'], shake: ['hurt'], dodge: ['guard'] };
 const DYING = new Set(['topple', 'crumble', 'drift', 'melt', 'swat', 'pickup', 'fade']);
 const spriteKey = sp => (sp.form === 'bear' ? '__bear' : sp.type);
+/* Lighting a mini takes a few milliseconds, so the poses are lit in the background, one every little while, starting
+   with the battle's heroes and monsters as the board is laid out: the prep rounds leave plenty of time. A pose needed
+   before then is drawn unlit for that moment, and swapped for the lit one when it's ready. */
+const toLight = []; let lightGen = 0, lighting = false;
+function makePose(key, pose, lit) {
+  const fig = key === '__bear' ? 'caveBear' : figType(key);
+  if (!TableMinis.hasPose(fig, pose)) return null;
+  const sp = TableMinis.sprite(fig, L.cell * L.dpr, boardOpts(key, { pose, lit }));
+  return { sp, white: TableMinis.flash(sp), lit };
+}
+function lightLater(key, pose) {
+  toLight.push([key, pose]);
+  if (lighting) return;
+  lighting = true;
+  const gen = lightGen, next = () => {
+    if (gen !== lightGen || !toLight.length) { lighting = false; if (toLight.length) lightLater(...toLight.shift()); return; }
+    const [k, p] = toLight.shift(), id = k + '|' + p, have = SPRP.get(id);
+    if (!(have && have.lit)) SPRP.set(id, makePose(k, p, true));
+    setTimeout(next, 40);
+  };
+  setTimeout(next, 40);
+}
 function poseSprite(key, pose) {
   const id = key + '|' + pose;
   let p = SPRP.get(id);
   if (p === undefined) {
-    const bear = key === '__bear', fig = bear ? 'caveBear' : figType(key);
-    p = null;
-    if (TableMinis.hasPose(fig, pose)) {
-      const sp = TableMinis.sprite(fig, L.cell * L.dpr, Object.assign({}, bear ? { faction: 'hero' } : figOpts(key), { pose }));
-      p = { sp, white: TableMinis.flash(sp) };
-    }
+    p = makePose(key, pose, false);
     SPRP.set(id, p);
+    if (p && SET.lit) lightLater(key, pose);
   }
   return p;
+}
+const POSES = [...new Set(Object.values(POSE_OF).flat())];
+function lightPoses(types) { // the battle's poses, queued as it is laid out
+  if (!SET.lit) return;
+  for (const t of types) for (const pose of POSES) if (!SPRP.has(t + '|' + pose) && TableMinis.hasPose(t === '__bear' ? 'caveBear' : figType(t), pose)) { SPRP.set(t + '|' + pose, makePose(t, pose, false)); lightLater(t, pose); }
 }
 // FXM.evaluate has just dropped finished anims (hit-stop included), so any anim that has started is playing now
 const NO_POSE = { pose: '', flip: false };

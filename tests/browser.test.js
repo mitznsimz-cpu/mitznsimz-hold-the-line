@@ -166,6 +166,22 @@ test('each battle has drifting motes to suit it, and Settings turns them off and
   assert(!page.errors.length, page.errors.join('\n'));
   await page.ctx.close();
 });
+test('the minis are lit, their poses are lit in the background before the fighting, and Settings turns it off', async () => {
+  const page = await open();
+  await battle(page, 'cellar', 'warren', { auto: false });
+  let l = (await info(page)).lit;
+  assert(l.on && l.standing >= 10, 'the standing minis are lit as the board is laid out: ' + JSON.stringify(l));
+  await page.waitForFunction(() => window.HTL_VIEW.info().lit.waiting === 0, null, { timeout: 15000 });
+  l = (await info(page)).lit;
+  assert(l.poses >= 10, 'and the poses soon after: ' + JSON.stringify(l));
+  await page.click('#btnPause');
+  await page.click('#overlay button:has-text("Settings")');
+  await page.click('[data-set="lit"]');
+  l = (await info(page)).lit;
+  assert(!l.on && l.standing === 0 && l.poses === 0, 'off: ' + JSON.stringify(l));
+  assert(!page.errors.length, page.errors.join('\n'));
+  await page.ctx.close();
+});
 test('Export saves the campaign to a file, and Import brings it back after asking, keeping the old one aside', async () => {
   const page = await open({ campaign: true });
   await page.click('#btnSettings');
