@@ -1465,6 +1465,31 @@ test('the campaign records the modes: bests, takings once, and mode wins are not
   assert.strictEqual(JSON.stringify(back.modes), JSON.stringify(c.modes), 'the modes survive a save and load');
 });
 
+// ---------- the pack is plain, readable data ----------
+// the pack as written, before the rules compile its maps (they add distance tables, with Infinity for walled-off squares)
+const packAsWritten = () => { const box = {}; vm.createContext(box); vm.runInContext(read('pack-core.js'), box, { filename: 'pack-core.js' }); return box.HTL_PACKS.core; };
+test('the pack is plain data: it survives a trip through JSON unchanged, so an editor or a JSON file can carry it', () => {
+  const P = packAsWritten(), back = JSON.parse(JSON.stringify(P));
+  assert.deepStrictEqual(back, JSON.parse(JSON.stringify(back)), 'round trip');
+  const bad = []; (function walk(o, at) {
+    if (typeof o === 'function' || o === undefined || (typeof o === 'number' && !isFinite(o))) bad.push(at);
+    else if (o && typeof o === 'object') for (const k in o) walk(o[k], at + '.' + k);
+  })(P, 'pack');
+  assert.deepStrictEqual(bad, [], 'values JSON cannot hold');
+});
+test('every monster is written out with named fields, all of them present and the right kind', () => {
+  const NUM = ['level', 'hp', 'ac', 'init', 'dexSave', 'speed', 'bounty'], ATK = ['bonus', 'n', 'd', 'mod', 'range'];
+  for (const [id, m] of Object.entries(packAsWritten().monsters)) {
+    assert.strictEqual(typeof m.name, 'string', id + ' name');
+    for (const k of NUM) assert.ok(typeof m[k] === 'number' && isFinite(m[k]), id + ' ' + k);
+    assert.ok(m.attack && typeof m.attack.name === 'string' && ['melee', 'ranged'].includes(m.attack.kind) && typeof m.attack.fx === 'string', id + ' attack');
+    for (const k of ATK) assert.ok(typeof m.attack[k] === 'number', id + ' attack.' + k);
+    assert.ok(m.traits && typeof m.traits === 'object' && !Array.isArray(m.traits), id + ' traits');
+    assert.ok(m.level >= 1 && m.level <= 12 && m.hp > 0 && m.ac > 0 && m.speed > 0, id + ' sensible numbers');
+  }
+  assert.ok(!/\bM\(|\bA\(/.test(read('pack-core.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'no positional helpers left in the pack');
+});
+
 // ---------- coverage: every mini fights somewhere ----------
 test('the page loads the shared minis, then the pack, then the rules, then the game', () => {
   const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
