@@ -77,7 +77,7 @@ These are the gate a release has to pass:
 - the browser tests pass, on a desktop and a phone size;
 - a playthrough in Safari, on a Mac and an iPhone or iPad, by hand.
 
-`tests/fixtures/` holds frozen copies of the v1.0, v1.1 and v1.2 rules. The battles from those versions must still replay exactly, seed for seed, so their waves and maps don't change.
+`tests/replays.json` holds every battle played start to finish by two fixed players from fixed seeds, as the rules play it now (`tests/replay_kit.js`). The game tests play them all again, so any change to how battles play shows up battle by battle, with what moved. When a change is meant (a new rule, a rebalanced wave), record them afresh with `node tests/record_replays.js` and say so in the release. (Until v1.9.5, frozen copies of the v1.0 to v1.2 rules did this job and old battles could never change; that rule was retired on 12 November.)
 
 ## How it fits together
 
