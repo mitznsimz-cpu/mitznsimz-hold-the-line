@@ -470,6 +470,7 @@ const SETTINGS = [
   ['bits', 'Hit effects', 'Sparks off armour, bone chips, stone dust, splats and embers.'],
   ['paws', 'Cats tidy up', 'Mitz and Simz take turns swatting fallen monsters off the table.'],
   ['torch', 'Torchlight', 'Flickering torches, moving shadows, and dark crypts and caves.'],
+  ['motes', 'Drifting motes', 'Dust, drips, embers, spores, leaves or snow drifting over each battle, to suit where it is.'],
   ['perf', 'Frame timings', 'Frames a second and where the time goes, in the corner of the screen. Handy for a bug report.']
 ];
 const getSet = key => (key === 'reduced' ? calm() : !!SET[key]);
@@ -477,6 +478,7 @@ function setSet(key, on) {
   if (key === 'reduced') SET.motion = on ? 'reduced' : 'full'; else SET[key] = on;
   if (key === 'sound') { SND.enabled(on); if (on) { SND.unlock(); SND.play('clack'); } }
   if (key === 'torch' && L) layout(); // a dark battle's floor is part of the board image
+  if (key === 'motes') setupMotes();
   saveSettings();
 }
 function toggleSound() { setSet('sound', !SET.sound); hint(SET.sound ? 'Sound on.' : 'Sound off.', 1400); }

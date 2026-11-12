@@ -150,6 +150,22 @@ test('the support line is on the tavern screen, and not when the tavern is opene
   await page.ctx.close();
 });
 
+test('each battle has drifting motes to suit it, and Settings turns them off and on again', async () => {
+  const page = await open({ campaign: true });
+  await battle(page, 'cellar', 'forge', { auto: false });
+  let m = (await info(page)).motes;
+  assert(m && m.kind === 'embers' && m.n > 10, 'the forge has embers: ' + JSON.stringify(m));
+  const before = (await info(page)).draws; await page.waitForTimeout(400);
+  assert((await info(page)).draws > before, 'the board keeps drawing');
+  await page.click('#btnPause');
+  await page.click('#overlay button:has-text("Settings")');
+  await page.click('[data-set="motes"]');
+  assert((await info(page)).motes === null, 'off');
+  await page.click('[data-set="motes"]');
+  assert((await info(page)).motes.kind === 'embers', 'and on again');
+  assert(!page.errors.length, page.errors.join('\n'));
+  await page.ctx.close();
+});
 test('Export saves the campaign to a file, and Import brings it back after asking, keeping the old one aside', async () => {
   const page = await open({ campaign: true });
   await page.click('#btnSettings');

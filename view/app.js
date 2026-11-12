@@ -184,7 +184,8 @@ function boot(data) {
 window.HTL_VIEW = Object.freeze({
   info: () => ({ version: VERSION, webkit: WEBKIT, budget: boardBudget(), board: [cv.width, cv.height], dpr: L ? L.dpr : 0,
     draws: drawCount, sprites: Object.keys(SPR).length, monsterTypes: Object.keys(PACK.monsters).length, adaptOff: !!pace.off,
-    phase: S ? S.phase : null, battle: S ? S.battle : null, started, paused, time: S ? S.time : 0 }),
+    phase: S ? S.phase : null, battle: S ? S.battle : null, started, paused, time: S ? S.time : 0,
+    motes: motes ? { kind: motes.kind, n: motes.seeds.length } : null }),
   speed: n => { speed = n; }
 });
 const hot = window.claude && window.claude.hot;
