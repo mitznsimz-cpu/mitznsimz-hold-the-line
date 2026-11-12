@@ -188,7 +188,12 @@ window.HTL_VIEW = Object.freeze({
     motes: motes ? { kind: motes.kind, n: motes.seeds.length } : null,
     floor: floorPat,
     lit: { on: !!SET.lit, standing: Object.values(SPR).filter(s => /\|lit$/.test(s.key)).length, poses: [...SPRP.values()].filter(p => p && p.lit).length, waiting: toLight.length } }),
-  speed: n => { speed = n; }
+  speed: n => { speed = n; },
+  // for the play bot (tools/playbot.js), read-only: where a square is on the screen, and the battle's numbers
+  at: (lane, sq) => { if (!L) return null; const g = gpos(lane, sq), r = cv.getBoundingClientRect(); return { x: r.left + g.x, y: r.top + g.y }; },
+  numbers: () => S ? { gold: S.gold, lives: S.lives, round: S.round, wave: S.wave, time: S.time, map: L ? [L.MH, L.MW] : null,
+    units: S.units.filter(u => u.alive).map(u => ({ kind: u.kind, type: u.type, hp: u.hp, lane: u.lane, sq: u.sq })) } : null,
+  camp: () => JSON.stringify(camp)
 });
 const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) hot.snapshot(() => ({ S: JSON.parse(JSON.stringify(Object.assign({}, S, { events: [] }))), speed, diceOn, started, autoOn }));
