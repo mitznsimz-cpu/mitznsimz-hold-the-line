@@ -19,7 +19,8 @@ It is in beta: the version number is on the Credits screen. It runs in any moder
 
 ## For beta testers
 
-- **Saves** are kept in your browser, for this web address only. If you played an earlier version somewhere else, you'll start a fresh campaign here. Clearing your browser's site data wipes your progress.
+- **Saves** are kept in your browser, for this web address only. To keep a copy, or to move your campaign to another browser or device, use **Export** and **Import** under Settings in the tavern. Clearing your browser's site data wipes your progress, so export first.
+- **Changing the save's shape:** raise `VERSION` in `campaign.js`, add a step to `STEPS`, and put an example of the old shape in `tests/saves/` (see its README). The tests load every example.
 - **Reporting a bug:** open an issue on this repo, or email mitznsimz@gmail.com. Please include:
   - the version number from the Credits screen;
   - the battle and the difficulty;

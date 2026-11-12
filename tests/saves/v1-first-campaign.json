@@ -1,0 +1,6 @@
+{ "note": "Version 1 as the campaign first shipped: no armoury, belt, back-room modes or figure choices yet.",
+  "save": { "v": 1, "takings": 340, "earned": 910, "wins": { "warren": { "easy": 3, "medium": 2 }, "caves": { "medium": 1 } },
+    "upgrades": { "door": 1, "till": 2, "kitchen": 0, "training": 0 }, "trophies": { "open": "2026-10-02" },
+    "seen": { "monsters": { "goblin": { "slain": 31 }, "direRat": { "slain": 12 } }, "heroes": { "fighter": { "placed": 9 } } },
+    "totals": { "battles": 5, "wins": 3, "kills": 60, "crits": 4 } },
+  "expect": { "wins": { "warren": { "easy": 3, "medium": 2 }, "caves": { "medium": 1 } }, "takings": 340, "upgrades": { "door": 1, "till": 2 }, "trophies": ["open"], "slain": { "goblin": 31 } } }

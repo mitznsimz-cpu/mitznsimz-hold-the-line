@@ -46,7 +46,7 @@ const near = (a, b, tol) => Math.abs(a - b) <= tol;
 let browser, url;
 // a fresh page: its own storage, a window size, a user agent, and anything to run before the game loads
 async function open({ w = 1280, h = 800, dpr = 1, ua = CHROME, settings = { sound: false }, campaign = false, before = [] } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr, userAgent: ua });
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr, userAgent: ua, acceptDownloads: true });
   const page = await ctx.newPage();
   page.errors = [];
   page.on('pageerror', e => page.errors.push(String(e)));
@@ -149,6 +149,41 @@ test('the support line is on the tavern screen, and not when the tavern is opene
   await page.ctx.close();
 });
 
+test('Export saves the campaign to a file, and Import brings it back after asking, keeping the old one aside', async () => {
+  const page = await open({ campaign: true });
+  await page.click('#btnSettings');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btnExport')]);
+  assert(/^hold-the-line-campaign-\d{4}-\d{2}-\d{2}\.json$/.test(dl.suggestedFilename()), 'file name: ' + dl.suggestedFilename());
+  const file = JSON.parse(fs.readFileSync(await dl.path(), 'utf8'));
+  assert(file.game === 'mitznsimz-hold-the-line' && file.campaign && file.campaign.takings === 2000, 'the file holds the campaign');
+  assert(/downloads/.test(await page.textContent('#campMsg')), 'it says where the file went');
+  // a file that isn't a campaign is turned away, and nothing changes
+  await page.setInputFiles('#impFile', { name: 'notes.json', mimeType: 'application/json', buffer: Buffer.from('{"hello":1}') });
+  await page.waitForFunction(() => /isn’t a Hold the Line campaign/.test(document.getElementById('campMsg').textContent));
+  // the campaign from the file, with different takings, replaces this one only when asked
+  file.campaign.takings = 1234;
+  await page.setInputFiles('#impFile', { name: 'c.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) });
+  await page.waitForSelector('#btnReplace');
+  const ask = await page.textContent('#overlay .panel');
+  assert(/2,000 gold/.test(ask) && /1,234 gold/.test(ask), 'it shows both campaigns: ' + ask);
+  await page.click('#btnKeep');
+  assert(await page.evaluate(k => JSON.parse(localStorage.getItem(k)).takings, 'mitzsimz.holdTheLine.campaign') === 2000, 'Keep changes nothing');
+  await page.setInputFiles('#impFile', { name: 'c.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) });
+  await page.click('#btnReplace');
+  const st = await page.evaluate(k => [JSON.parse(localStorage.getItem(k)).takings, JSON.parse(localStorage.getItem(k + '.before-import')).takings], 'mitzsimz.holdTheLine.campaign');
+  assert(st[0] === 1234 && st[1] === 2000, 'imported, with the old campaign kept aside: ' + st);
+  await page.click('#btnSettings'); // and the tavern behind shows the imported campaign
+  await page.click('#btnBack');
+  assert(/1,234/.test(await page.textContent('.takings')), 'the tavern shows the imported takings');
+  // mid-battle, the tavern's Settings have no Export or Import
+  await battle(page, 'cellar', 'warren', { auto: false });
+  await page.click('#btnPause');
+  await page.click('#overlay button:has-text("Back to the tavern")');
+  await page.click('#btnSettings');
+  assert(!(await page.$('#btnImport')), 'no Import while a battle is paused underneath');
+  assert(!page.errors.length, page.errors.join('\n'));
+  await page.ctx.close();
+});
 test('every room of the tavern opens, and every game in the back room starts, with no errors', async () => {
   const page = await open({ w: 1280, h: 800, campaign: true });
   const rooms = await page.evaluate(() => [...document.querySelectorAll('#overlay .room[data-room]:not([disabled])')].map(b => b.dataset.room));

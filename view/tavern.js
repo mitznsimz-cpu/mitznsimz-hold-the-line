@@ -57,7 +57,7 @@ function showTavern(from) {
     else if (r === 'house') showHouse(from);
   }));
   if ($('btnBack')) $('btnBack').addEventListener('click', showPause);
-  $('btnSettings').addEventListener('click', () => showSettings(() => showTavern(from)));
+  $('btnSettings').addEventListener('click', () => showSettings(() => showTavern(from), from !== 'pause'));
   $('btnCredits').addEventListener('click', () => showCredits(from));
   drawRegulars();
   (o.querySelector('.room:not([disabled])') || $('btnSettings')).focus();
@@ -480,7 +480,7 @@ function setSet(key, on) {
   saveSettings();
 }
 function toggleSound() { setSet('sound', !SET.sound); hint(SET.sound ? 'Sound on.' : 'Sound off.', 1400); }
-function showSettings(back) {
+function showSettings(back, atTavern) { // atTavern: the campaign's Export and Import, which never show mid-battle
   const o = $('overlay');
   const row = ([key, label, note]) => '<div class="setrow"><div class="setlab"><b>' + label + '</b><span>' + note + '</span></div>' +
     '<button class="toggle" type="button" data-set="' + key + '" aria-pressed="' + getSet(key) + '" aria-label="' + label + '">' + (getSet(key) ? 'On' : 'Off') + '</button></div>';
@@ -488,6 +488,9 @@ function showSettings(back) {
     '<div class="setlist">' + row(SETTINGS[0]) +
     '<div class="setrow"><div class="setlab"><b>Volume</b></div><input id="setVol" type="range" min="0" max="100" step="5" value="' + Math.round(SET.volume * 100) + '" aria-label="Volume"></div>' +
     SETTINGS.slice(1).map(row).join('') + '</div>' +
+    (atTavern ? '<div class="setrow camprow"><div class="setlab"><b>Your campaign</b><span>Saved in this browser. Export it to keep a copy, or to carry it to another browser and Import it there.</span>' +
+      '<span id="campMsg" role="status"></span></div><div class="btnrow"><button class="secondary" id="btnExport" type="button">Export</button>' +
+      '<button class="secondary" id="btnImport" type="button">Import</button><input id="impFile" type="file" accept=".json,application/json,text/plain" hidden></div></div>' : '') +
     '<div class="btnrow"><button class="primary" id="btnBack" type="button">Done</button></div></div>';
   o.hidden = false;
   o.querySelectorAll('.toggle').forEach(b => b.addEventListener('click', () => {
@@ -497,7 +500,43 @@ function showSettings(back) {
   $('setVol').addEventListener('input', e => { SET.volume = +e.target.value / 100; SND.volume(SET.volume); });
   $('setVol').addEventListener('change', () => { saveSettings(); SND.unlock(); sfx('coin'); });
   $('btnBack').addEventListener('click', back);
+  if (atTavern) {
+    $('btnExport').addEventListener('click', () => { exportCampaign(); $('campMsg').textContent = 'Exported: look for ' + campFileName() + ' in your downloads.'; });
+    $('btnImport').addEventListener('click', () => $('impFile').click());
+    $('impFile').addEventListener('change', e => {
+      const f = e.target.files && e.target.files[0]; if (!f) return;
+      f.text().then(text => {
+        const got = CAMP.importText(text);
+        if (got.error) { $('campMsg').textContent = got.error; return; }
+        confirmImport(got, back);
+      }, () => { $('campMsg').textContent = 'That file couldn’t be opened.'; });
+    });
+  }
   $('btnBack').focus();
+}
+// the campaign as a file to download: hold-the-line-campaign-2026-11-12.json
+const campFileName = () => 'hold-the-line-campaign-' + today() + '.json';
+function exportCampaign() {
+  const url = URL.createObjectURL(new Blob([CAMP.exportText(camp, today())], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = campFileName(); document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+// an imported campaign replaces this browser's only once the player says so; the one it replaces is kept aside first
+function confirmImport(got, back) {
+  const o = $('overlay');
+  o.innerHTML = '<div class="panel" role="dialog" aria-labelledby="ovTitle"><span class="eyebrow">Import a campaign</span><h2 id="ovTitle">Replace this campaign?</h2>' +
+    '<p><b>In this browser now:</b> ' + CAMP.summary(camp) + '.</p>' +
+    '<p><b>In the file' + (got.saved ? ', saved ' + got.saved : '') + ':</b> ' + CAMP.summary(got.campaign) + '.</p>' +
+    '<p>The campaign here is replaced by the one in the file. Export this one first if you might want it back.</p>' +
+    '<div class="btnrow"><button class="primary" id="btnReplace" type="button">Replace it</button><button class="secondary" id="btnKeep" type="button">Keep this one</button></div></div>';
+  o.hidden = false;
+  $('btnReplace').addEventListener('click', () => {
+    try { const st = store(); if (st) st.setItem(CAMP.KEY + '.before-import', JSON.stringify(camp)); } catch (e) { /* full: the import still goes ahead */ }
+    camp = got.campaign; LOOKS = camp.looks; saveCamp();
+    hint('Campaign imported.', 1800); back();
+  });
+  $('btnKeep').addEventListener('click', () => showSettings(back, true));
+  $('btnKeep').focus();
 }
 
 /* Support and links: Pete's standard for every Mitz & Simz game (the roadmap's "Support and links"). Same words everywhere,

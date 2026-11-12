@@ -1899,6 +1899,56 @@ test('campaign: the save survives a reload, and a broken or tampered save still 
   assert.strictEqual(t.takings, 0); assert.strictEqual(t.upgrades.door, 2); assert.strictEqual(t.wins.warren.medium, 3);
   assert.ok(!t.wins.nowhere); assert.ok(!t.trophies.fake);
 });
+test('campaign: every saved example of an old save loads as it should (tests/saves)', () => {
+  const files = fs.readdirSync(path.join(__dirname, 'saves')).filter(f => f.endsWith('.json'));
+  assert.ok(files.length >= 2, 'the examples are missing');
+  const shapes = new Set();
+  for (const f of files) {
+    const ex = JSON.parse(fs.readFileSync(path.join(__dirname, 'saves', f), 'utf8')), e = ex.expect;
+    const store = Array.isArray(ex.save) ? memStore() : memStore({ [C.KEY]: JSON.stringify(ex.save) });
+    const c = C.load(store, Array.isArray(ex.save) ? ex.save : []);
+    shapes.add(Array.isArray(ex.save) ? 0 : ex.save.v);
+    assert.strictEqual(canon(c.wins), canon(e.wins), f + ': wins');
+    assert.strictEqual(c.takings, e.takings, f + ': takings');
+    for (const k in e.upgrades || {}) assert.strictEqual(c.upgrades[k], e.upgrades[k], f + ': ' + k);
+    for (const t of e.trophies || []) assert.ok(c.trophies[t], f + ': trophy ' + t);
+    for (const m in e.slain || {}) assert.strictEqual(c.seen.monsters[m].slain, e.slain[m], f + ': slain ' + m);
+    assert.strictEqual(canon(C.clean(JSON.parse(JSON.stringify(c)))), canon(c), f + ': saves and loads again unchanged');
+    assert.strictEqual(c.v, C.VERSION, f + ': comes out as this version');
+  }
+  for (let v = 0; v <= C.VERSION; v++) assert.ok(shapes.has(v), 'there is no example of a version-' + v + ' save in tests/saves');
+  for (let v = 0; v < C.VERSION; v++) assert.strictEqual(typeof C.STEPS[v], 'function', 'no step up from version ' + v);
+});
+test('campaign: loading keeps a copy of any save it can’t use as it is, and never overwrites that copy', () => {
+  const broken = memStore({ [C.KEY]: '{not json' });
+  assert.strictEqual(C.load(broken).takings, 0);
+  assert.strictEqual(broken.m[C.KEY + '.unreadable'], '{not json', 'a damaged save is kept aside');
+  const newer = JSON.stringify(Object.assign(C.fresh(), { v: C.VERSION + 1, takings: 70, futureThing: [1] }));
+  const s2 = memStore({ [C.KEY]: newer });
+  assert.strictEqual(C.load(s2).takings, 70, 'a newer save loads as well as it can');
+  assert.strictEqual(s2.m[C.KEY + '.newer'], newer, 'and the newer save is kept whole');
+  s2.setItem(C.KEY, JSON.stringify(Object.assign(C.fresh(), { v: C.VERSION + 1, takings: 1 }))); C.load(s2);
+  assert.strictEqual(s2.m[C.KEY + '.newer'], newer, 'the first copy stays');
+  const now = memStore({ [C.KEY]: JSON.stringify(C.fresh()) }); C.load(now);
+  assert.deepStrictEqual(Object.keys(now.m), [C.KEY], 'a save of this version needs no copy');
+});
+test('campaign: Export and Import carry a campaign to another browser, and turn away anything else', () => {
+  const c = C.fresh();
+  C.record(c, winSum('warren', { met: ['goblin'], slain: { goblin: 3 } })); C.buy(c, 'till'); C.setLook(c, 'fighter', 'f');
+  const text = C.exportText(c, '2026-11-12');
+  const back = C.importText(text);
+  assert.ok(!back.error, back.error);
+  assert.strictEqual(canon(back.campaign), canon(c)); assert.strictEqual(back.saved, '2026-11-12');
+  assert.ok(!C.importText(JSON.stringify(c)).error, 'the bare save from storage imports too');
+  for (const bad of ['', 'hello', '[]', '{"game":"mitznsimz-dungeon-delve","campaign":{}}', '{"game":"mitznsimz-hold-the-line"}', '{"name":"something"}'])
+    assert.ok(C.importText(bad).error, 'turned away: ' + bad);
+  const later = JSON.parse(text); later.campaign.v = C.VERSION + 1;
+  assert.ok(/newer/.test(C.importText(JSON.stringify(later)).error), 'a campaign from a newer game says so');
+  const odd = JSON.parse(text); odd.campaign.takings = -9; odd.campaign.wins.nowhere = { easy: 3 };
+  const t = C.importText(JSON.stringify(odd)).campaign;
+  assert.strictEqual(t.takings, 0); assert.ok(!t.wins.nowhere, 'an edited file is cleaned like any save');
+  assert.ok(/1 battle won, \d+ gold in the till, \d+ trophies/.test(C.summary(c)), C.summary(c));
+});
 test('campaign: wins from before the campaign carry over', () => {
   const c = C.load(memStore(), ['warren', 'caves']);
   assert.ok(C.won(c, 'caves')); assert.ok(C.unlocked(c, 'crypt'));

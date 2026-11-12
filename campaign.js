@@ -1,4 +1,4 @@
-/* Hold the Line campaign v1: the Cat & Mouse's progress between battles.
+/* Hold the Line campaign (the save is version 1): the Cat & Mouse's progress between battles.
    Battles open in order and earn 1 to 3 stars for lives kept; wins pay takings that buy the tavern's upgrades; heroes join
    along the way; trophies reward feats; the trophy wall fills in as monsters are met.
    Pure: no page and no clock. The game hands in its storage and today's date, so Node can test every rule here.
@@ -136,21 +136,71 @@ var HTL_CAMPAIGN = (function (HTL) {
   }
   // which figure stands for a kind of hero: hers or his. Only the look changes; the rules don't.
   function setLook(c, type, look) { if (!HTL.HEROES[type]) return false; if (look === 'f') c.looks[type] = 'f'; else delete c.looks[type]; return true; }
-  // before the campaign, the game only remembered which battles were won: those count as one-star wins on Medium
-  function migrate(oldWins) {
-    const c = fresh();
-    (Array.isArray(oldWins) ? oldWins : []).forEach(id => { if (IDX[id] != null) { c.wins[id] = { medium: 1 }; c.totals.wins++; c.totals.battles++; } });
-    c.takings = c.earned = 50 * Object.keys(c.wins).length; // a welcome back for the regulars
-    return c;
+  /* Upgrading old saves: a chain of steps, keyed on the save's version number. STEPS[n] turns a version-n save into a
+     version n+1 save, so a save from any earlier version walks up the chain one step at a time, and clean() then tidies
+     the result. When the shape of the save changes: raise VERSION, add STEPS[old VERSION], and add a saved example of
+     the old shape to the tests (tests/saves/), which load every example and check what comes out.
+     Version 0 is the list of won battles the game kept before the campaign. */
+  const STEPS = {
+    // before the campaign, the game only remembered which battles were won: those count as one-star wins on Medium
+    0: old => {
+      const c = fresh();
+      (Array.isArray(old.wins) ? old.wins : []).forEach(id => { if (IDX[id] != null) { c.wins[id] = { medium: 1 }; c.totals.wins++; c.totals.battles++; } });
+      c.takings = c.earned = 50 * Object.keys(c.wins).length; // a welcome back for the regulars
+      return c;
+    }
+  };
+  const versionOf = raw => (raw && typeof raw.v === 'number' && isFinite(raw.v) ? Math.floor(raw.v) : 1); // saves before 1.8.4 always said v: 1
+  // a save of any version, as this version's campaign; a save from a newer version of the game loads as well as it can
+  function upgrade(raw) {
+    let v = versionOf(raw);
+    while (v < VERSION) { raw = STEPS[v](raw); v++; if (raw) raw.v = v; }
+    return clean(raw);
   }
+  function migrate(oldWins) { return upgrade({ v: 0, wins: oldWins }); }
+  /* Loading never throws progress away. Before the save is rewritten in a new shape, the old one is copied aside once
+     (KEY + '.v1', say, for a version-1 save); so is a save from a newer version of the game, and one too damaged to read. */
+  function keepAside(storage, key, raw) { try { if (storage.getItem(key) == null) storage.setItem(key, raw); } catch (e) { /* full: nothing more to do */ } }
   function load(storage, oldWins) {
-    try {
-      const raw = storage && storage.getItem(KEY);
-      if (raw) return clean(JSON.parse(raw));
-    } catch (e) { /* unreadable: start again below */ }
+    let raw = null;
+    try { raw = storage && storage.getItem(KEY); } catch (e) { raw = null; }
+    if (raw) {
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch (e) { parsed = undefined; }
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const v = versionOf(parsed);
+        if (v !== VERSION) keepAside(storage, KEY + (v > VERSION ? '.newer' : '.v' + v), raw);
+        return upgrade(parsed);
+      }
+      keepAside(storage, KEY + '.unreadable', raw);
+    }
     return oldWins && oldWins.length ? migrate(oldWins) : fresh();
   }
   function save(storage, c) { try { storage.setItem(KEY, JSON.stringify(c)); return true; } catch (e) { return false; } }
+
+  /* Export and Import: the campaign as a small file, to move it to another browser or keep a copy. Only the campaign
+     travels; settings stay with each browser. */
+  const FILE_TAG = 'mitznsimz-hold-the-line';
+  function exportText(c, date) { return JSON.stringify({ game: FILE_TAG, v: VERSION, saved: date || '', campaign: c }, null, 1); }
+  // text from a file → { campaign } or { error } with words for the player. Takes an exported file, or the bare save.
+  function importText(text) {
+    let o;
+    try { o = JSON.parse(String(text)); } catch (e) { return { error: 'That file isn’t a Hold the Line campaign: it couldn’t be read.' }; }
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return { error: 'That file isn’t a Hold the Line campaign.' };
+    let raw = o;
+    if (o.game !== undefined) {
+      if (o.game !== FILE_TAG) return { error: 'That file is from another game, not Hold the Line.' };
+      raw = o.campaign;
+      if (!raw || typeof raw !== 'object') return { error: 'That file has no campaign in it.' };
+    } else if (!('wins' in o && 'upgrades' in o)) return { error: 'That file isn’t a Hold the Line campaign.' };
+    if (versionOf(raw) > VERSION) return { error: 'That campaign was saved by a newer version of the game. Reload the page to get the latest, then try again.' };
+    return { campaign: upgrade(raw), saved: typeof o.saved === 'string' ? o.saved.slice(0, 10) : '' };
+  }
+  // a line that tells two campaigns apart, for the question before one replaces the other
+  function summary(c) {
+    const n = IDS.filter(id => won(c, id)).length;
+    return n + (n === 1 ? ' battle' : ' battles') + ' won, ' + c.takings.toLocaleString('en-GB') + ' gold in the till, ' + Object.keys(c.trophies).length + ' trophies';
+  }
 
   /* ---------- reading the campaign ---------- */
   const won = (c, id) => !!c.wins[id] && DIFFS.some(d => c.wins[id][d]);
@@ -288,7 +338,7 @@ var HTL_CAMPAIGN = (function (HTL) {
     return res;
   }
 
-  return { VERSION, KEY, DIFFS, CELLAR, HOUSE, HOUSE_OPENS, START, JOINS, ROOMS, UPGRADES, TROPHIES, DROPS, MODE_PAY, BELT_MAX, recordMode, buyThrow, setLook, fresh, clean, migrate, load, save,
+  return { VERSION, KEY, DIFFS, CELLAR, HOUSE, HOUSE_OPENS, START, JOINS, ROOMS, UPGRADES, TROPHIES, DROPS, MODE_PAY, BELT_MAX, recordMode, buyThrow, setLook, fresh, clean, migrate, upgrade, STEPS, load, save, exportText, importText, summary,
     won, winsCount, stars, starsFor, unlocked, roster, rooms, nextUpgrade, buy, equip, duty, battleOptions, pay, record };
 })(HTL);
 if (typeof module !== 'undefined' && module.exports) module.exports = HTL_CAMPAIGN;
