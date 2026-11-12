@@ -18,6 +18,9 @@ var HTL_SIMZ = (function (HTL) {
       if (m && m.sq <= 2) usePower(s, 'swat', m.lane, m.sq);
     }
     const po = s.powers.pounce;
+    // a boss winding up with heroes in front of it: pounce on it, and the blow never lands
+    const winding = mons.find(m => m.windup);
+    if (po && s.round >= po.ready && winding) { usePower(s, 'pounce', winding.lane, winding.sq); return; }
     if (po && s.round >= po.ready) {
       let best = null;
       for (const m of mons) {
@@ -181,7 +184,7 @@ var HTL_SIMZ = (function (HTL) {
       if (!front) continue;
       let score = 0, crowd = 0;
       for (const m of s.units) if (m.alive && m.kind === 'monster' && near(m, front)) { score += m.hp; crowd++; }
-      if (MONSTERS[front.type].traits.boss) score += 150;
+      if (MONSTERS[front.type].traits.boss) score += front.windup ? 400 : 150; // a boss winding up: charge it, to break the blow
       if (front.sq <= 3) score += 120;
       if (crowd >= 3) score += 60;
       if (score > bestScore) { best = front; bestScore = score; }

@@ -143,6 +143,8 @@ var HTL = (function (P) {
     ovenWarn: 'the ovens are about to flare', flare: 'the ovens flare', scorch: 'an oven\u2019s flare hits a unit', barrelWarn: 'a barrel is about to roll down a chute',
     barrel: 'a barrel rolls, bowling over what is in the way', gate: 'the yard gate is dropped or raised',
     // the cats, and Reverse
+    windup: 'a boss winds up a crushing blow, to land on its next turn', stagger: 'a boss\u2019s wind-up comes apart: hurt hard, or stunned',
+    unleash: 'a boss\u2019s crushing blow lands', crushed: 'the blow hits a hero in front of it',
     pounce: 'Mitz pounces: a 3 \u00d7 3 square of monsters is stunned', swat: 'Simz swats a monster off the table', send: 'in Reverse, you send a monster in'
   });
   const NO_TRAITS = {};
@@ -153,7 +155,7 @@ var HTL = (function (P) {
      where it can't. The tests check that every trait in the pack and every one the rules read is listed here.
      The order is the order the card lists them in. */
   const TRAITS = {
-    boss:         { text: 'Boss', where: 'not shoved back, not frightened; Simz plans for it' },
+    boss:         { text: 'Boss: every few turns it winds up a crushing blow on the heroes in front of it. Hurt it hard or stun it to break it', where: 'not shoved back, not frightened; BEFORE_ACT: windUp; Simz plans for it' },
     undead:       { text: 'Undead', where: 'holy ground, sunlight, Sacred Flame and Smite do double, a Mace of Disruption' },
     flying:       { text: 'Flies over the first hero in its way, and over pits', where: 'monsterAct: moving; not slowed by water or ice; no traps' },
     multi:        { text: 'Attacks twice a turn', where: 'monsterAct: attacking' },
@@ -1024,7 +1026,36 @@ var HTL = (function (P) {
       return false;
     }
   ];
+  /* Boss wind-ups (after the Dungeon Delve's v5.4): every few turns a boss with heroes ahead of it in its row winds up
+     a crushing blow instead of attacking, and it lands on its next turn on every hero within WINDUP.reach in front of it:
+     its own weapon, half as hard again, with nothing to hit. Two answers: hurt it by WINDUP.stagger of its hit points
+     before it lands, and it staggers and loses that turn; or stun it (Mitz's pounce, a paralysing blow), and the moment
+     passes. The numbers were tuned with Simz's balance runs, as the Delve warns, not by feel. */
+  const WINDUP = { every: 4, first: 3, reach: 3, stagger: 0.1, power: 1.5 };
   const BEFORE_ACT = [ // instead of moving or attacking; true = the turn is used
+    function windUp(s, u) {
+      if (!traits(u).boss) return false;
+      const w = u.windup;
+      if (w) {
+        u.windup = null;
+        if (u.turns > w.at) { emit(s, { type: 'stagger', id: u.id, why: 'stunned' }); return false; } // it was held as the moment came
+        if (w.hp - u.hp >= WINDUP.stagger * u.maxHp) { emit(s, { type: 'stagger', id: u.id, why: 'hurt' }); return true; }
+        const atk = MONSTERS[u.type].attack, caught = s.units.filter(h => h.alive && h.kind === 'hero' && !h.inside && h.lane === u.lane && h.sq < u.sq &&
+          u.sq - h.sq <= WINDUP.reach && clearRow(s, u.lane, h.sq, u.sq)).sort((a, b) => b.sq - a.sq);
+        emit(s, { type: 'unleash', id: u.id, lane: u.lane, sq: u.sq, n: caught.length });
+        for (const h of caught) {
+          const dmg = Math.max(1, Math.floor((dice(s, atk.n, atk.d) + atk.mod) * WINDUP.power)), killed = hurt(h, dmg);
+          emit(s, { type: 'crushed', from: u.id, to: h.id, dmg, killed });
+          if (killed) died(s, h, u); else shapeCheck(s, h);
+        }
+        return true;
+      }
+      if (u.turns < WINDUP.first || (u.turns - WINDUP.first) % WINDUP.every !== 0) return false;
+      if (!s.units.some(h => h.alive && h.kind === 'hero' && !isObject(h) && !h.inside && h.lane === u.lane && h.sq < u.sq && u.sq - h.sq <= WINDUP.reach)) return false;
+      u.windup = { at: u.turns + 1, hp: u.hp };
+      emit(s, { type: 'windup', id: u.id, lane: u.lane, sq: u.sq, reach: WINDUP.reach });
+      return true;
+    },
     function callHelp(s, u) { const sm = traits(u).summon; return !!(sm && !u.minor && u.made < sm.max && u.turns % sm.every === 0 && summon(s, u, sm.type)); },
     function mendNearby(s, u) { const md = traits(u).mend; return !!(md && u.turns % md.every === 0 && mend(s, u, md)); },
     function breathe(s, u) { // young red dragon: fire down the whole row, a Dexterity save for half
@@ -1669,7 +1700,7 @@ var HTL = (function (P) {
   const lastWave = b => (b.endless ? Infinity : b.waves.length - 1);
 
   const PACK = { id: P.id, name: P.name, heroes: HEROES, monsters: MONSTERS, battles: BATTLES, maps: MAP_BY_ID, parts: P.parts || {} };
-  return { ROUND, PACK, TRAITS, HEROES, MONSTERS, BATTLES, MAPS: MAP_BY_ID, STATUSES, PATHS, DIFFICULTY, PARTY, HERO_TYPES, DEFENDER_TYPES, tavernOf, ITEMS, POWERS, usePower, powerTargets, itemOf, _heroAttack: heroAttack, trapAt,
+  return { ROUND, PACK, TRAITS, WINDUP, HEROES, MONSTERS, BATTLES, MAPS: MAP_BY_ID, STATUSES, PATHS, DIFFICULTY, PARTY, HERO_TYPES, DEFENDER_TYPES, tavernOf, ITEMS, POWERS, usePower, powerTargets, itemOf, _heroAttack: heroAttack, trapAt,
     newGame, step, place, canPlace, recall, refundOf, preview, levelUp, upgradeCost, suggestLoadout, unitAt, addUnit, battle, mapOf, cellAt, describe, parseSpawns,
     addStatus, hasStatus, nearestAhead, heroInReach,
     battleById: id => makeBattle(id), addMaker, waveOf, send, canSend, sendCost, THROWS, throwItem, canThrow,
