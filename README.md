@@ -88,7 +88,7 @@ The page loads its scripts in this order:
 | `index.html` | The page, its styles, and the script tags in load order |
 | `icon.svg`, `icon-*.png` | The browser-tab and home-screen icons |
 | `manifest.webmanifest`, `sw.js` | Installing to the home screen, and playing offline after one visit. Network first: online, every file is fetched fresh, so updates arrive as before |
-| `mitznsimz_minis.js` | The shared minis library (core 2.5.0), with Hold the Line's adapter at the end |
+| `mitznsimz_minis.js` | The shared minis library (core 2.5.0), with Hold the Line's adapter at the end, which also lights the board's minis (after the Delve's relief lighting) |
 | `motion.js` | How the minis move, and the effects between them: arrows, spells, hit-stop, particles, the tumbling d20, the cats' paws (1.1.0) |
 | `sound.js` | Sound, all made in the browser; no audio files (1.0.0) |
 | `pack-core.js` | Content: heroes, paths, monsters, maps, battles, items |

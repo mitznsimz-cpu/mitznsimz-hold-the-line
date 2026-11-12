@@ -2021,6 +2021,40 @@ var TableMinis = (function () {
   // a pose can reach past the standing figure's canvas (a lunge, a lean back), so a posed sprite gets a margin;
   // it keeps its own ax/ay, so it stands on the same ground point
   var POSE_PAD = { x: 0.15, top: 0.06 };
+  /* Lit minis (opts.lit): the figure lit as a solid thing, once, when its sprite is drawn. After the Dungeon Delve's
+     reliefOf and its mini shader (msdd_view3d.js): the outline, blurred, plus a little of the brightness gives a height;
+     its slope gives a surface direction at every pixel; that is lit from the board's light (top left, in front), with a
+     soft highlight and a warm rim where the surface turns away. Only the colour changes, never the outline. */
+  var LIGHT = (function () { var v = [-0.5, -0.6, 0.62], n = Math.hypot(v[0], v[1], v[2]); return [v[0] / n, v[1] / n, v[2] / n]; })();
+  var HALF = (function () { var v = [LIGHT[0], LIGHT[1], LIGHT[2] + 1], n = Math.hypot(v[0], v[1], v[2]); return [v[0] / n, v[1] / n, v[2] / n]; })();
+  function light(cv, u) {
+    var w = cv.width, h = cv.height, g = cv.getContext('2d'), img = g.getImageData(0, 0, w, h), px = img.data, n = w * h;
+    var A = new Float32Array(n), B = new Float32Array(n), col = new Float32Array(Math.max(w, h)), i, x, y, acc;
+    for (i = 0; i < n; i++) A[i] = px[i * 4 + 3] / 255;
+    var blur = function (src, dst, r) { // a box blur along the rows, then down the columns
+      for (y = 0; y < h; y++) { acc = 0; for (x = -r; x < w + r; x++) { if (x + r < w) acc += src[y * w + x + r]; if (x - r - 1 >= 0) acc -= src[y * w + x - r - 1]; if (x >= 0 && x < w) dst[y * w + x] = acc / (2 * r + 1); } }
+      for (x = 0; x < w; x++) { acc = 0; for (y = -r; y < h + r; y++) { if (y + r < h) acc += dst[(y + r) * w + x]; if (y - r - 1 >= 0) acc -= dst[(y - r - 1) * w + x]; if (y >= 0 && y < h) col[y] = acc / (2 * r + 1); } for (y = 0; y < h; y++) dst[y * w + x] = col[y]; }
+    };
+    var r = Math.max(2, Math.round(u * 0.035));
+    blur(A, B, r); blur(B, A, Math.max(1, Math.round(r * 0.7)));
+    for (i = 0; i < n; i++) A[i] += (px[i * 4] * 0.3 + px[i * 4 + 1] * 0.59 + px[i * 4 + 2] * 0.11) / 255 * 0.08 * (px[i * 4 + 3] / 255);
+    var k = r * 1.3, L0 = LIGHT[0], L1 = LIGHT[1], L2 = LIGHT[2], H0 = HALF[0], H1 = HALF[1], H2 = HALF[2];
+    for (y = 0; y < h; y++) {
+      var row = y * w, up = (y > 0 ? y - 1 : 0) * w, dn = (y < h - 1 ? y + 1 : y) * w;
+      for (x = 0; x < w; x++) {
+        i = row + x; var p4 = i * 4, a = px[p4 + 3]; if (!a) continue;
+        var nx = (A[row + (x > 0 ? x - 1 : 0)] - A[row + (x < w - 1 ? x + 1 : x)]) * k, ny = (A[up + x] - A[dn + x]) * k;
+        var inv = 1 / Math.sqrt(nx * nx + ny * ny + 1); nx *= inv; ny *= inv;
+        var d = nx * L0 + ny * L1 + inv * L2, wrap = d > -0.3 ? (d + 0.3) / 1.3 : 0, lit = 0.55 + 0.65 * wrap;
+        var hs = nx * H0 + ny * H1 + inv * H2, sp = 0;
+        if (hs > 0.8) { var h2 = hs * hs, h4 = h2 * h2, h8 = h4 * h4, h16 = h8 * h8; sp = h16 * h8 * 40; } // the highlight: hs to the 24th
+        var side = 0.2 - (nx * L0 + ny * L1), rim = side > 0 ? (1 - inv) * (1 - inv) * 28 * side : 0;
+        var R = px[p4] * lit + sp + rim, G = px[p4 + 1] * lit + sp + rim * 0.85, Bc = px[p4 + 2] * lit + sp + rim * 0.6;
+        px[p4] = R > 255 ? 255 : R; px[p4 + 1] = G > 255 ? 255 : G; px[p4 + 2] = Bc > 255 ? 255 : Bc;
+      }
+    }
+    g.putImageData(img, 0, 0);
+  }
   function render(type, u, opts) {
     var f = figure(type), b = box(type), posed = !!(opts && hasPose(type, opts.pose));
     var px = posed ? POSE_PAD.x : 0, pt = posed ? POSE_PAD.top : 0;
@@ -2028,6 +2062,7 @@ var TableMinis = (function () {
     var cv = makeCanvas(w, h), g = cv.getContext('2d');
     g.translate(ax, ay); g.scale(u, u);
     drawInto(g, type, u, opts);
+    if (opts && opts.lit) light(cv, u);
     return { cv: cv, ax: ax, ay: ay, u: u, type: type, figure: f.type, source: 'drawn', size: f.size, baseRx: b.rx, version: 1,
       pose: posed ? opts.pose : null };
   }
@@ -2063,14 +2098,14 @@ var TableMinis = (function () {
     return true;
   }
   // entry: a name, or { type, image, anchor, height }. Returns a cached sprite; read sprite.cv each frame,
-  // because it is swapped in place when the image arrives. opts: { view, faction, boss, pose, onChange(sprite) }.
+  // because it is swapped in place when the image arrives. opts: { view, faction, boss, pose, lit, onChange(sprite) }.
   // A pose the figure lacks, or one asked of an image, gives the standing sprite (same cache entry).
   function sprite(entry, u, opts) {
     if (typeof entry === 'string') entry = { type: entry };
     opts = opts || {};
     var pose = !entry.image && hasPose(entry.type, opts.pose) ? opts.pose : '';
     if (opts.pose && !pose) { opts = Object.assign({}, opts); delete opts.pose; }
-    var key = [entry.type, entry.image || '', Math.round(u), opts.view || 'tabletop', opts.faction || '', opts.boss ? 'boss' : '', pose].join('|');
+    var key = [entry.type, entry.image || '', Math.round(u), opts.view || 'tabletop', opts.faction || '', opts.boss ? 'boss' : '', pose, opts.lit ? 'lit' : ''].join('|');
     var sp = cache.get(key);
     if (sp) return sp;
     sp = render(entry.type, u, opts);
