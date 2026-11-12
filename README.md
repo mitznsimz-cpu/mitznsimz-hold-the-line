@@ -93,7 +93,15 @@ The page loads its scripts in this order:
 | `sim.js` | The rules engine, plus Simz: placement, plans, suggested parties |
 | `modes.js` | Endless, the Daily Challenge, the Boss Rush, the puzzles and Reverse |
 | `campaign.js` | The tavern hub: progress, takings, upgrades, trophies and the save |
-| `game.js` | The view: drawing, animation, input, menus and settings |
+| `view/core.js` | The view's setup: settings, the battle state it draws, and laying the board out to fit the window |
+| `view/board.js` | The board's pieces: the mat, the pillars, and the minis as sprites with their poses |
+| `view/events.js` | Each event from the rules becomes animation, sound and words on the board |
+| `view/draw.js` | Drawing the board each frame, in depth order, with the effects on top |
+| `view/hud.js` | The battle's panels: the initiative track, the HUD and hero tray, the belt, the cats' powers, a mini's card, the next wave |
+| `view/tavern.js` | The Cat & Mouse between battles: the hub and every room, and the common room where a party is picked |
+| `view/app.js` | Input, settings and credits, the main loop (with Frame timings and the adaptive sharpness), and boot |
+
+The `view/` files are plain scripts that share one scope: what one declares at the top, the others can use, as when they were a single `game.js`. They load in the order above, and only `app.js` starts anything, so a file may use what a later one declares, but only from inside a function.
 
 The rules come first, and they never touch the page. Given a seed, `sim.js` and `pack-core.js` always play the same game, so the tests can run whole battles headless. The view only draws the events the rules give it.
 

@@ -7,10 +7,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for f in index.html game.js sim.js pack-core.js modes.js campaign.js motion.js sound.js mitznsimz_minis.js; do
+for f in index.html sim.js pack-core.js modes.js campaign.js motion.js sound.js mitznsimz_minis.js view/core.js view/board.js view/events.js view/draw.js view/hud.js view/tavern.js view/app.js; do
   [ -f "$f" ] || { echo "missing $f"; exit 1; }
 done
-for f in *.js tests/*.js; do node --check "$f"; done
+for f in *.js view/*.js tests/*.js; do node --check "$f"; done
 echo "Syntax OK"
 
 echo; echo "== Game tests =="

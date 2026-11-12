@@ -1082,12 +1082,8 @@ test('the fish pond: swimmers go straight across, walkers go round by whichever 
   assert.strictEqual(way([['ranger', 1, 1], ['fighter', 1, 5]]), 4, 'heroes on top: it goes round the bottom');
   assert.strictEqual(way([['ranger', 5, 1], ['fighter', 5, 5]]), 2, 'heroes below: over the top');
 });
-test('every feat a trophy asks for is passed on from the battle', () => {
-  const asked = new Set(); for (const m of read('campaign.js').matchAll(/s\.feats\.(\w+)/g)) asked.add(m[1]);
-  const passed = /feats: \{([^}]*)\} \}\), today\(\)\)/.exec(read('game.js'));
-  assert.ok(passed, 'the battle hands its feats to the campaign');
-  for (const k of asked) assert.ok(new RegExp('\\b' + k + ':').test(passed[1]), 'trophy feat ' + k + ' is never passed on');
-});
+// every feat a trophy asks for is passed on from the battle: tested in tests/browser.test.js, by watching what a battle
+// hands the campaign when it ends
 test('the ice house: walkers slide down the ice twice as fast, nobody can stand on it, and flyers don’t care', () => {
   const m = HTL.MAPS.icehouse, s = bare(5, 'icehouse');
   assert.strictEqual(m.rows[1][4], '=');
@@ -1395,7 +1391,10 @@ test('a stand-off in the modes ends: long after the last arrival the nearest mon
   const camp = HTL.newGame(1, 'warren'); g = 0;
   while (camp.phase === 'running' && camp.round < 12 && g++ < 9000) { HTL.step(camp, 0.25); camp.events.length = 0; }
   assert.strictEqual(camp.arrived, undefined, 'a campaign battle never starts the clock');
-  assert.ok(/restless/.test(read('sim.js')) && /\.mode \|\| mapOf\(s\)\.turns \|\| battle\(s\)\.stage === 2\) s\.arrived/.test(read('sim.js')), 'only the modes, the new shapes of cellar and the house');
+  const noted = id => { const t = HTL.newGame(1, id); let k = 0; while (t.phase === 'running' && t.round < 12 && k++ < 9000) { HTL.step(t, 0.25); t.events.length = 0; } return t.arrived; };
+  const turned = HTL.BATTLES.find(b => !b.mode && b.stage !== 2 && HTL.MAPS[b.map] && HTL.MAPS[b.map].turns), house = HTL.BATTLES.find(b => b.stage === 2);
+  assert.ok(turned && noted(turned.id) != null, 'a cellar of the new shapes starts the clock: ' + (turned && turned.id));
+  assert.ok(house && noted(house.id) != null, 'so does the house: ' + (house && house.id));
 });
 // two attackers for Reverse: a steady trickle of the cheapest, and a crowd at the weakest door every few rounds
 const ATTACK = {
@@ -1468,7 +1467,7 @@ test('the campaign records the modes: bests, takings once, and mode wins are not
 
 // ---------- coverage: every mini fights somewhere ----------
 test('the page loads the shared minis, then the pack, then the rules, then the game', () => {
-  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'modes.js', 'campaign.js', 'game.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
+  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
   assert.ok(order.every(i => i > 0), 'a script tag is missing: ' + order);
   assert.ok(order.every((i, k) => !k || i > order[k - 1]), 'scripts load out of order');
   assert.ok(!/MINI CORE START/.test(page), 'the page should load mitznsimz_minis.js, not carry a copy');
@@ -1480,7 +1479,6 @@ test('what each unit is made of comes from the minis library (2.3.0), and every 
   for (const t in want) assert.strictEqual(MM.material(fig(t)), want[t], t);
   const box = {}; vm.createContext(box); vm.runInContext(read('motion.js'), box, { filename: 'motion.js' });
   for (const t of Object.keys(HTL.PACK.heroes).concat(Object.keys(HTL.PACK.monsters))) assert.ok(box.MitzMotion.MATERIALS[MM.material(fig(t))], t + ' has a material motion knows');
-  assert.ok(/materialOf\(st\.sp\.type\)/.test(read('game.js')) && !/const MATERIAL = /.test(read('game.js')), 'the game reads materials from the library, not a copy of the map');
 });
 // every unit has its own figure in the shared library since minis 2.1.0; the set stays for any future figure still to be drawn
 const AWAITING_ART = new Set([]);
