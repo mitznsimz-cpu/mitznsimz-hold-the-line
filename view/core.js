@@ -36,7 +36,7 @@ const matOf = sp => (sp.stone ? 'stone' : materialOf(sp.type));
 const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
   barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
 const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-const VERSION = '1.8.4'; // shown in the credits, so testers can say which version they were playing
+const VERSION = '1.8.5'; // shown in the credits, so testers can say which version they were playing
 const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
 const cv = $('board'), ctx = cv.getContext('2d');
@@ -65,11 +65,6 @@ const SPRL = new Set(); // heroes whose figure is sculpted facing left: turned r
 const turned = sp => L.horiz && sp.form !== 'bear' && SPRL.has(sp.type);
 
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
-const lerp = (a, b, t) => a + (b - a) * t;
-const easeOut = t => 1 - (1 - t) * (1 - t);
-const easeIn = t => t * t;
-const easeInOut = t => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-const easeOutBack = t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
 function mulberry(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const clock = () => (S ? S.time + acc : 0);
 

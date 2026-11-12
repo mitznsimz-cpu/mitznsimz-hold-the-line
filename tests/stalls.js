@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
-const H = new Function(['pack-core.js', 'sim.js'].map(f => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n') + '\nreturn HTL;')();
+const H = new Function(['pack-core.js', 'sim.js', 'simz.js'].map(f => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n') + '\nreturn HTL;')();
 
 const n = +(process.argv[2] || 10), DK = ['easy', 'medium', 'hard', 'deadly'];
 const ALT = { bard: 'lore', fighter: 'shieldwarden', ranger: 'houndmaster', wizard: 'graveseer', cleric: 'dawnkeeper', rogue: 'thief', barbarian: 'berserker' };

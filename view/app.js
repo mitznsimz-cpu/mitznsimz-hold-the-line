@@ -191,3 +191,7 @@ const hot = window.claude && window.claude.hot;
 if (hot && hot.snapshot) hot.snapshot(() => ({ S: JSON.parse(JSON.stringify(Object.assign({}, S, { events: [] }))), speed, diceOn, started, autoOn }));
 if (hot && hot.probe) hot.probe({ gpos, squareAt, state: () => S }); // read-only, for checks run from outside the page
 if (hot && hot.ready) hot.ready(boot); else boot((hot && hot.data) || {});
+
+// Offline and the home screen (sw.js): only on the game's own site, never in a preview frame or from a file on disk
+if ('serviceWorker' in navigator && window.isSecureContext && window.top === window && !hot)
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* no offline play here: the game is unaffected */ }); });

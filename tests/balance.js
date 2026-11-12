@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
-const H = new Function(['pack-core.js', 'sim.js'].map(f => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n') + '\nreturn HTL;')();
+const H = new Function(['pack-core.js', 'sim.js', 'simz.js'].map(f => fs.readFileSync(path.join(ROOT, f), 'utf8')).join('\n') + '\nreturn HTL;')();
 
 const want = process.argv[2] && process.argv[2] !== 'all' ? process.argv[2].split(',') : H.BATTLES.map(b => b.id);
 const N = +(process.argv[3] || 10);

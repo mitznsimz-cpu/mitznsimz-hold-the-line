@@ -24,7 +24,7 @@ const CHROME = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.
 const SETTINGS = 'htl-settings-v1';
 
 /* ---------- a tiny static server, so the game is served from a sub-folder as on GitHub Pages ---------- */
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.css': 'text/css' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json', '.css': 'text/css', '.webmanifest': 'application/manifest+json' };
 function serve() {
   const server = http.createServer((req, res) => {
     const url = decodeURIComponent(req.url.split('?')[0]);
@@ -45,8 +45,9 @@ const near = (a, b, tol) => Math.abs(a - b) <= tol;
 
 let browser, url;
 // a fresh page: its own storage, a window size, a user agent, and anything to run before the game loads
-async function open({ w = 1280, h = 800, dpr = 1, ua = CHROME, settings = { sound: false }, campaign = false, before = [] } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr, userAgent: ua, acceptDownloads: true });
+async function open({ w = 1280, h = 800, dpr = 1, ua = CHROME, settings = { sound: false }, campaign = false, before = [], offline = false } = {}) {
+  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr, userAgent: ua, acceptDownloads: true,
+    serviceWorkers: offline ? 'allow' : 'block' }); // the offline worker only where a test is about it
   const page = await ctx.newPage();
   page.errors = [];
   page.on('pageerror', e => page.errors.push(String(e)));
@@ -182,6 +183,23 @@ test('Export saves the campaign to a file, and Import brings it back after askin
   await page.click('#btnSettings');
   assert(!(await page.$('#btnImport')), 'no Import while a battle is paused underneath');
   assert(!page.errors.length, page.errors.join('\n'));
+  await page.ctx.close();
+});
+test('after one visit the game installs to the home screen and plays with no connection', async () => {
+  const page = await open({ offline: true });
+  const man = await page.evaluate(() => fetch(document.querySelector('link[rel=manifest]').href).then(r => r.json()));
+  assert(man.start_url === './' && man.display === 'standalone' && man.icons.some(i => i.sizes === '512x512' && i.purpose === 'maskable'), 'the manifest');
+  for (const i of man.icons) assert((await page.evaluate(src => fetch(src).then(r => r.status), i.src)) === 200, 'icon ' + i.src);
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 10000 });
+  await page.ctx.setOffline(true);
+  await page.reload();
+  await page.waitForFunction(() => window.HTL_VIEW, null, { timeout: 10000 });
+  assert((await info(page)).version, 'the game loads offline');
+  await battle(page, 'cellar', 'warren');
+  await page.waitForFunction(() => window.HTL_VIEW.info().time > 3, null, { timeout: 20000 });
+  assert(!page.errors.filter(e => !/Failed to load resource|fonts/.test(e)).length, page.errors.join('\n'));
+  await page.ctx.setOffline(false);
   await page.ctx.close();
 });
 test('every room of the tavern opens, and every game in the back room starts, with no errors', async () => {

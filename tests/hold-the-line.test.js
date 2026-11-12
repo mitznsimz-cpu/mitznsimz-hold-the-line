@@ -15,6 +15,7 @@ const sandbox = {};
 vm.createContext(sandbox);
 vm.runInContext(read('pack-core.js'), sandbox, { filename: 'pack-core.js' });
 vm.runInContext(read('sim.js'), sandbox, { filename: 'sim.js' });
+vm.runInContext(read('simz.js'), sandbox, { filename: 'simz.js' });
 vm.runInContext(read('modes.js'), sandbox, { filename: 'modes.js' });
 vm.runInContext(read('campaign.js'), sandbox, { filename: 'campaign.js' });
 vm.runInContext(read('mitznsimz_minis.js'), sandbox, { filename: 'mitznsimz_minis.js' });
@@ -1309,7 +1310,7 @@ test('the party suggestion keeps to the heroes a campaign has', () => {
 
 // ---------- Phase 5: the modes ----------
 const MODES = sandbox.HTL_MODES;
-const freshBox = () => { const box = {}; vm.createContext(box); for (const f of ['pack-core.js', 'sim.js', 'modes.js']) vm.runInContext(read(f), box, { filename: f }); return box; };
+const freshBox = () => { const box = {}; vm.createContext(box); for (const f of ['pack-core.js', 'sim.js', 'simz.js', 'modes.js']) vm.runInContext(read(f), box, { filename: f }); return box; };
 const simzPlays = (H, id, opts, seed) => {
   const s = H.newGame(seed || 1, id, opts || {}), log = []; let last = -1, g = 0;
   while (s.phase === 'running' && g++ < 120000) { if (s.round !== last) { last = s.round; H.autoplay(s); } H.step(s, 0.25); for (const e of s.events) log.push(e.type + (e.id || '') + (e.dmg || '') + (e.roll || '')); s.events.length = 0; }
@@ -1490,6 +1491,55 @@ test('every monster is written out with named fields, all of them present and th
   assert.ok(!/\bM\(|\bA\(/.test(read('pack-core.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'no positional helpers left in the pack');
 });
 
+// ---------- offline ----------
+test('the offline worker keeps every file the page loads, and only those', () => {
+  const page = read('index.html'), sw = read('sw.js');
+  const files = new Set(JSON.parse('[' + sw.slice(sw.indexOf('const FILES = [') + 15, sw.indexOf('];', sw.indexOf('const FILES = ['))).replace(/'/g, '"').replace(/\s+/g, ' ') + ']'));
+  const local = [...page.matchAll(/(?:src|href)="([^"]+)"/g)].map(m => m[1]).filter(u => !/^(https?:|mailto:|#)/.test(u));
+  for (const f of local) assert.ok(files.has(f), 'sw.js does not keep ' + f);
+  const man = JSON.parse(read('manifest.webmanifest'));
+  for (const i of man.icons) { assert.ok(files.has(i.src), 'sw.js does not keep ' + i.src); assert.ok(fs.existsSync(path.join(dir, i.src)), i.src + ' is missing'); }
+  for (const f of files) if (f !== './') assert.ok(fs.existsSync(path.join(dir, f)), 'sw.js keeps ' + f + ', which does not exist');
+  assert.ok(files.has('./') && files.has('manifest.webmanifest'));
+});
+
+// ---------- the events the rules send ----------
+test('every event the rules send is in HTL.EVENTS, and every entry is sent somewhere', () => {
+  const src = ['sim.js', 'simz.js', 'modes.js'].map(read).join('\n');
+  const sent = new Set([...src.matchAll(/emit\(s, \{ type: '(\w+)'/g)].map(m => m[1]));
+  for (const t of sent) assert.ok(HTL.EVENTS[t], 'the rules send "' + t + '", which HTL.EVENTS does not list');
+  for (const t of Object.keys(HTL.EVENTS)) assert.ok(sent.has(t), 'HTL.EVENTS lists "' + t + '", which nothing sends');
+  assert.strictEqual((src.match(/emit\(/g) || []).length - 1, (src.match(/emit\(s, \{ type: '\w+'/g) || []).length, 'every emit names its type where the test can see it');
+  const seen = new Set(); // and as battles run
+  for (const id of HTL.BATTLES.map(b => b.id).concat(['rush:1', 'reverse:warren'])) {
+    const s = HTL.newGame(5, id); let last = -1, g = 0;
+    while (s.phase === 'running' && g++ < 60000) { if (s.round !== last) { last = s.round; if (!s.purse) HTL.autoplay(s); } HTL.step(s, 0.1); for (const e of s.events.splice(0)) seen.add(e.type); }
+  }
+  for (const t of seen) assert.ok(HTL.EVENTS[t], 'a battle sent "' + t + '", which HTL.EVENTS does not list');
+  assert.ok(seen.size >= 40, 'only ' + seen.size + ' kinds of event in every battle; is the check still watching?');
+});
+test('the page shows every event, or says why it needs nothing for it', () => {
+  const v = read('view/events.js');
+  const cases = new Set([...v.matchAll(/case '(\w+)'/g)].map(m => m[1]));
+  const block = v.slice(v.indexOf('const SHOWN_FROM_STATE = {'), v.indexOf('};', v.indexOf('const SHOWN_FROM_STATE = {')));
+  const quiet = new Set([...block.matchAll(/(\w+): '/g)].map(m => m[1]));
+  for (const t of Object.keys(HTL.EVENTS)) assert.ok(cases.has(t) !== quiet.has(t), t + ': ' + (cases.has(t) ? 'shown, and also listed as shown from the state' : 'neither shown nor listed in SHOWN_FROM_STATE'));
+  for (const t of cases) assert.ok(HTL.EVENTS[t], 'the page handles "' + t + '", which the rules never send');
+  for (const t of quiet) assert.ok(HTL.EVENTS[t], 'SHOWN_FROM_STATE lists "' + t + '", which the rules never send');
+});
+test('the rules play without Simz, and Reverse says plainly that it needs him', () => {
+  const box = {}; vm.createContext(box);
+  for (const f of ['pack-core.js', 'sim.js', 'modes.js']) vm.runInContext(read(f), box, { filename: f });
+  const H = box.HTL, s = H.newGame(3, 'warren');
+  assert.strictEqual(H.autoplay, undefined, 'Simz is not part of the rules');
+  assert.strictEqual(H.place(s, 'fighter', 2, 4), null);
+  for (let i = 0; i < 2000 && s.phase === 'running'; i++) H.step(s, 0.1);
+  assert.ok(s.round > 5, 'a battle runs');
+  const r = H.newGame(3, 'reverse:warren');
+  assert.throws(() => { for (let i = 0; i < 200; i++) H.step(r, 0.1); }, /simz\.js/);
+  assert.ok(Object.isFrozen(H.look) && Object.values(H.look).every(f => typeof f === 'function' || typeof f === 'string'), 'HTL.look holds only questions and constants');
+});
+
 // ---------- the trait registry ----------
 test('every trait in the pack is in the registry, and every registry entry is used by some monster', () => {
   const used = new Set();
@@ -1503,7 +1553,7 @@ test('every trait in the pack is in the registry, and every registry entry is us
   }
 });
 test('every trait the rules or the page look up is in the registry', () => {
-  const files = ['sim.js', 'modes.js', 'campaign.js'].concat(fs.readdirSync(path.join(dir, 'view')).map(f => 'view/' + f));
+  const files = ['sim.js', 'simz.js', 'modes.js', 'campaign.js'].concat(fs.readdirSync(path.join(dir, 'view')).map(f => 'view/' + f));
   for (const f of files) {
     const src = read(f), re = /traits\([^()]*\)\.(\w+)|\.traits\.(\w+)/g; let m;
     while ((m = re.exec(src))) { const k = m[1] || m[2]; assert.ok(HTL.TRAITS[k], f + ' looks up the trait "' + k + '", which the registry does not list'); }
@@ -1540,7 +1590,7 @@ test('every monster card says what each of its traits does', () => {
 
 // ---------- coverage: every mini fights somewhere ----------
 test('the page loads the shared minis, then the pack, then the rules, then the game', () => {
-  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
+  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'simz.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
   assert.ok(order.every(i => i > 0), 'a script tag is missing: ' + order);
   assert.ok(order.every((i, k) => !k || i > order[k - 1]), 'scripts load out of order');
   assert.ok(!/MINI CORE START/.test(page), 'the page should load mitznsimz_minis.js, not carry a copy');

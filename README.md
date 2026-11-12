@@ -86,12 +86,14 @@ The page loads its scripts in this order:
 | File | What it does |
 |---|---|
 | `index.html` | The page, its styles, and the script tags in load order |
-| `icon.svg`, `icon-32.png`, `icon-180.png` | The browser-tab and home-screen icon |
+| `icon.svg`, `icon-*.png` | The browser-tab and home-screen icons |
+| `manifest.webmanifest`, `sw.js` | Installing to the home screen, and playing offline after one visit. Network first: online, every file is fetched fresh, so updates arrive as before |
 | `mitznsimz_minis.js` | The shared minis library (core 2.5.0), with Hold the Line's adapter at the end |
 | `motion.js` | How the minis move, and the effects between them: arrows, spells, hit-stop, particles, the tumbling d20, the cats' paws (1.1.0) |
 | `sound.js` | Sound, all made in the browser; no audio files (1.0.0) |
 | `pack-core.js` | Content: heroes, paths, monsters, maps, battles, items |
-| `sim.js` | The rules engine, plus Simz: placement, plans, suggested parties |
+| `sim.js` | The rules engine: placement, combat, traits (`TRAITS`), the events it sends (`EVENTS`), suggested parties |
+| `simz.js` | Simz, the cats' own player: the Auto button, the balance tests and the keeper in Reverse. He reaches the rules only through `HTL`, and `HTL.look` for questions about the board |
 | `modes.js` | Endless, the Daily Challenge, the Boss Rush, the puzzles and Reverse |
 | `campaign.js` | The tavern hub: progress, takings, upgrades, trophies and the save |
 | `view/core.js` | The view's setup: settings, the battle state it draws, and laying the board out to fit the window |
@@ -104,7 +106,7 @@ The page loads its scripts in this order:
 
 The `view/` files are plain scripts that share one scope: what one declares at the top, the others can use, as when they were a single `game.js`. They load in the order above, and only `app.js` starts anything, so a file may use what a later one declares, but only from inside a function.
 
-The rules come first, and they never touch the page. Given a seed, `sim.js` and `pack-core.js` always play the same game, so the tests can run whole battles headless. The view only draws the events the rules give it.
+The rules come first, and they never touch the page. Given a seed, `sim.js` and `pack-core.js` always play the same game, so the tests can run whole battles headless. The view only draws the events the rules give it: every one is listed in `HTL.EVENTS`, and `view/events.js` either shows it or says, in `SHOWN_FROM_STATE`, why it needs nothing. A new event is added to both, or the tests fail.
 
 ### Shared with Dungeon Delve
 
