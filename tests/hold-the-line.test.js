@@ -1739,151 +1739,27 @@ test('battle data parses, and every wave has spawns', () => {
   assert.throws(() => HTL.parseSpawns('goblin:0 owlbear:3'));
 });
 
-// ---------- the v1.0 battles still play exactly as they did ----------
-// The frozen v1.0 rules run side by side with these ones. Every event v1.0 wrote must come out the same,
-// in the same order, from the same seed and the same choices; new fields on an event are allowed.
-const OLD = (() => {
-  const box = {}; vm.createContext(box);
-  vm.runInContext(fs.readFileSync(path.join(__dirname, 'fixtures', 'sim-v1.0.js'), 'utf8'), box, { filename: 'sim-v1.0.js' });
-  return box.HTL;
-})();
-function replay(H, seed, battleId, brain, tick) {
-  const s = H.newGame(seed, battleId), log = [];
-  let lastRound = -1, guard = 0;
-  while (s.phase === 'running' && guard++ < 40000) {
-    if (brain && s.round !== lastRound) { lastRound = s.round; brain(H, s); }
-    H.step(s, tick);
-    for (const ev of s.events.splice(0)) log.push(ev);
-  }
-  return { s, log };
-}
-// Simz as she played in v1.0, rebuilt on the public API so the same player can drive either set of rules.
-// (Today's Simz has learnt a few things since, so she would not make the same choices; that is not a rules change.)
-function simzV1(H, s) {
-  if (s.phase !== 'running') return;
-  const near = (a, b) => Math.abs(a.lane - b.lane) <= 1 && Math.abs(a.sq - b.sq) <= 1;
-  const put = (type, lane, sq) => !H.place(s, type, lane, sq);
-  for (let lane = 0; lane < 5; lane++) {
-    let front = null;
-    for (const u of s.units) if (u.alive && u.kind === 'monster' && u.lane === lane && (!front || u.sq < front.sq)) front = u;
-    if (!front) continue;
-    const mine = s.units.filter(u => u.alive && u.kind === 'hero' && u.lane === lane && u.sq < front.sq);
-    const shooters = mine.filter(u => u.type === 'ranger' || u.type === 'wizard');
-    let placedHere = false;
-    if (H.MONSTERS[front.type].traits.resist && !mine.some(u => u.type === 'wizard'))
-      for (const sq of [2, 1, 3]) if (sq < front.sq && put('wizard', lane, sq)) { placedHere = true; break; }
-    if (!placedHere && !shooters.length)
-      for (const sq of [1, 2, 3]) if (sq < front.sq && put('ranger', lane, sq)) { placedHere = true; break; }
-    if (!mine.some(u => u.type === 'fighter') && front.sq >= 2 && front.sq <= 6) put('fighter', lane, front.sq - 1);
-  }
-  let planDone = true;
-  for (const [type, lane, sq] of V1_PLAN) {
-    const why = H.canPlace(s, type, lane, sq);
-    if (why === 'occupied') continue;
-    if (why) { planDone = false; break; }
-    put(type, lane, sq);
-  }
-  let best = null, bestScore = 0;
-  for (let lane = 0; lane < 5; lane++) {
-    let front = null;
-    for (const u of s.units) if (u.alive && u.kind === 'monster' && u.lane === lane && u.sq <= 8 && (!front || u.sq < front.sq)) front = u;
-    if (!front) continue;
-    let score = 0, crowd = 0;
-    for (const m of s.units) if (m.alive && m.kind === 'monster' && near(m, front)) { score += m.hp; crowd++; }
-    if (H.MONSTERS[front.type].traits.boss) score += 150;
-    if (front.sq <= 3) score += 120;
-    if (crowd >= 3) score += 60;
-    if (score > bestScore) { best = front; bestScore = score; }
-  }
-  if (best && bestScore >= 60 && (planDone || bestScore >= 150))
-    for (let sq = best.sq - 1; sq >= 0; sq--) if (!H.unitAt(s, best.lane, sq)) { put('barbarian', best.lane, sq); break; }
-}
-const V1_PLAN = [
-  ['bard', 2, 0], ['bard', 1, 0], ['ranger', 2, 1], ['bard', 3, 0],
-  ['ranger', 1, 1], ['ranger', 3, 1], ['ranger', 0, 1], ['ranger', 4, 1],
-  ['fighter', 2, 4], ['fighter', 1, 4], ['fighter', 3, 4], ['fighter', 0, 4], ['fighter', 4, 4],
-  ['wizard', 2, 2], ['bard', 0, 0], ['wizard', 1, 2], ['wizard', 3, 2], ['bard', 4, 0], ['wizard', 0, 2], ['wizard', 4, 2],
-  ['cleric', 1, 3], ['cleric', 3, 3],
-  ['fighter', 0, 5], ['fighter', 2, 5], ['fighter', 4, 5], ['rogue', 1, 5], ['rogue', 3, 5],
-  ['ranger', 2, 3], ['ranger', 0, 3], ['ranger', 4, 3]
-];
-test('the rebuilt v1.0 Simz plays exactly like the frozen one', () => {
-  for (const seed of [11, 4242]) for (const id of ['warren', 'halls']) {
-    const a = replay(OLD, seed, id, (H, s) => H.autoplay(s), 0.1), b = replay(OLD, seed, id, simzV1, 0.1);
-    assert.strictEqual(JSON.stringify(b.log), JSON.stringify(a.log), id + ' seed ' + seed);
-  }
+// ---------- replays: every battle plays out as recorded ----------
+// tests/replays.json holds every battle played by two fixed players from fixed seeds, as the rules played it when it
+// was recorded. A difference means the rules now play differently: fine if that was meant (record afresh with
+// node tests/record_replays.js and say so in the release), a bug if not. Retired on 12 November: the frozen v1.0 to
+// v1.2 rules this replaced, so the game could change how battles play (Pete's call).
+const REPLAYS = require('./replays.json'), kit = require('./replay_kit.js');
+test('every battle in the pack has its replays recorded, and nothing recorded is missing from the pack', () => {
+  const want = Object.keys(REPLAYS.replays).map(k => k.split(' ')[0]);
+  for (const b of HTL.BATTLES) for (const who of Object.keys(kit.PLAYERS)) for (const seed of kit.SEEDS)
+    assert.ok(REPLAYS.replays[b.id + ' ' + who + ' ' + seed], b.id + ' ' + who + ' ' + seed + ' has no replay: run node tests/record_replays.js');
+  for (const id of new Set(want)) assert.ok(HTL.BATTLES.some(b => b.id === id), 'a replay of a battle the pack no longer has: ' + id);
 });
-const brains = {
-  simz: simzV1,
-  slow: (H, s) => { // the same hesitant player as below, driving whichever rules it is given
-    if (s.round % 3) return;
-    for (const [type, lane, sq] of [['bard', 2, 0], ['ranger', 2, 1], ['ranger', 1, 1], ['ranger', 3, 1], ['fighter', 2, 4], ['wizard', 2, 2],
-      ['ranger', 0, 1], ['ranger', 4, 1], ['fighter', 1, 4], ['fighter', 3, 4], ['cleric', 2, 3], ['rogue', 1, 5], ['barbarian', 3, 2]]) {
-      const why = H.canPlace(s, type, lane, sq);
-      if (why === 'occupied' || why === 'recharging') continue;
-      if (!why) H.place(s, type, lane, sq);
-      break;
-    }
-  }
-};
-for (const b of OLD.BATTLES) {
-  test('replay: ' + b.name + ' plays out exactly as in v1.0', () => {
-    const seeds = QUICK ? [11, 4242] : [11, 4242, 90001, 7, 31337, 2024];
-    for (const seed of seeds) for (const [who, brain] of Object.entries(brains)) for (const tick of [0.1, 0.25]) {
-      const a = replay(OLD, seed, b.id, brain, tick), c = replay(HTL, seed, b.id, brain, tick);
-      const where = b.id + ' seed ' + seed + ' ' + who + ' tick ' + tick;
-      for (let i = 0; i < a.log.length; i++) {
-        const o = a.log[i], n = c.log[i];
-        if (!n) assert.fail(where + ': the new rules stopped after ' + i + ' events; v1.0 wrote ' + a.log.length);
-        for (const k of Object.keys(o)) if (JSON.stringify(o[k]) !== JSON.stringify(n[k]))
-          assert.fail(where + ': event ' + i + ' (' + o.type + ') differs at ' + k + ': v1.0 ' + JSON.stringify(o[k]) + ', now ' + JSON.stringify(n[k]));
-      }
-      assert.strictEqual(c.log.length, a.log.length, where + ': extra events');
-      assert.strictEqual(c.s.phase, a.s.phase, where);
-      assert.strictEqual(c.s.gold, a.s.gold, where);
-    }
-  });
-}
-
-const OLD11 = (() => {
-  const box = {}; vm.createContext(box);
-  vm.runInContext(fs.readFileSync(path.join(__dirname, 'fixtures', 'sim-v1.1.js'), 'utf8'), box, { filename: 'sim-v1.1.js' });
-  return box.HTL;
-})();
-for (const b of OLD11.BATTLES) {
-  test('replay: ' + b.name + ' on Medium plays out exactly as in v1.1', () => {
-    const seeds = QUICK ? [11] : [11, 4242, 90001];
-    for (const seed of seeds) for (const [who, brain] of Object.entries(brains)) {
-      const a = replay(OLD11, seed, b.id, brain, 0.1), c = replay(HTL, seed, b.id, brain, 0.1);
-      const where = b.id + ' seed ' + seed + ' ' + who;
-      for (let i = 0; i < a.log.length; i++) {
-        const o = a.log[i], n = c.log[i];
-        if (!n) assert.fail(where + ': the new rules stopped after ' + i + ' events; v1.1 wrote ' + a.log.length);
-        for (const k of Object.keys(o)) if (JSON.stringify(o[k]) !== JSON.stringify(n[k]))
-          assert.fail(where + ': event ' + i + ' (' + o.type + ') differs at ' + k + ': v1.1 ' + JSON.stringify(o[k]) + ', now ' + JSON.stringify(n[k]));
-      }
-      assert.strictEqual(c.log.length, a.log.length, where + ': extra events');
-    }
-  });
-}
-
-const OLD12 = (() => {
-  const box = {}; vm.createContext(box);
-  vm.runInContext(fs.readFileSync(path.join(__dirname, 'fixtures', 'sim-v1.2.js'), 'utf8'), box, { filename: 'sim-v1.2.js' });
-  return box.HTL;
-})();
-for (const b of OLD12.BATTLES) {
-  test('replay: ' + b.name + ' on Medium plays out exactly as in v1.2', () => {
-    for (const seed of QUICK ? [11] : [11, 4242]) for (const [who, brain] of Object.entries(brains)) {
-      const a = replay(OLD12, seed, b.id, brain, 0.1), c = replay(HTL, seed, b.id, brain, 0.1);
-      const where = b.id + ' seed ' + seed + ' ' + who;
-      for (let i = 0; i < a.log.length; i++) {
-        const o = a.log[i], n = c.log[i];
-        if (!n) assert.fail(where + ': stopped after ' + i + ' events; v1.2 wrote ' + a.log.length);
-        for (const k of Object.keys(o)) if (JSON.stringify(o[k]) !== JSON.stringify(n[k]))
-          assert.fail(where + ': event ' + i + ' (' + o.type + ') differs at ' + k + ': v1.2 ' + JSON.stringify(o[k]) + ', now ' + JSON.stringify(n[k]));
-      }
-      assert.strictEqual(c.log.length, a.log.length, where + ': extra events');
+for (const b of HTL.BATTLES) {
+  test('replay: ' + b.name + ' plays out as recorded (v' + REPLAYS.recorded + ')', () => {
+    for (const [who, player] of Object.entries(kit.PLAYERS)) for (const seed of QUICK ? kit.SEEDS.slice(0, 1) : kit.SEEDS) {
+      const key = b.id + ' ' + who + ' ' + seed, was = REPLAYS.replays[key], now = kit.replay(HTL, seed, b.id, player);
+      if (!was) continue; // the test above says so
+      const diff = ['phase', 'round', 'gold', 'lives', 'events'].filter(k => was[k] !== now[k]).map(k => k + ' ' + was[k] + ' → ' + now[k]);
+      for (const t of new Set([...Object.keys(was.counts), ...Object.keys(now.counts)])) if ((was.counts[t] || 0) !== (now.counts[t] || 0)) diff.push(t + ' events ' + (was.counts[t] || 0) + ' → ' + (now.counts[t] || 0));
+      if (!diff.length && was.fingerprint !== now.fingerprint) diff.push('the same events in number, but not the same events');
+      assert.ok(!diff.length, key + ' plays differently: ' + diff.slice(0, 6).join(', ') + '. Meant? Record afresh: node tests/record_replays.js');
     }
   });
 }
