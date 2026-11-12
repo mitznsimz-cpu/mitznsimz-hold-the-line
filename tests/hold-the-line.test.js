@@ -2018,55 +2018,8 @@ test('varied parties: with a Bard, very different sixes still win on Hard, and b
   assert.ok(!low.length, 'a party fell short: ' + low.join('; '));
   table.push('varied   Simz ' + won + '/' + n + ' on Hard, six different parties');
 });
-
-test('support and links follow the shared standard: the exact Ko-fi words, .co.uk, new tabs, never in a battle', () => {
-  const g = read('game.js'), page = read('index.html');
-  assert.ok(g.includes("'☕ Enjoying it? Buy Pete some dice, or Mitz &amp; Simz some treats.'"), 'the Ko-fi words, exactly');
-  assert.ok(g.includes("kofi: 'https://ko-fi.com/mitznsimz'") && g.includes("site: 'https://mitznsimz.co.uk'"), 'the Ko-fi and website links');
-  assert.ok(g.includes("'🛡 MitzNSimz.co.uk'") && g.includes('3D-printed miniatures and tools for Dungeon Masters'), 'the website words');
-  for (const u of ['mitznsimz-dungeon-delve/', 'mitznsimz-tarokk/', 'DnD-Encounter-Tracker/', 'mailto:mitznsimz@gmail.com'])
-    assert.ok(g.includes(u), 'the credits link ' + u);
-  assert.ok(g.includes("repo: 'https://github.com/mitznsimz-cpu/mitznsimz-hold-the-line'") && g.includes("ext(LINKS.repo + '/issues', 'GitHub')"), 'bugs go to the game\'s GitHub repository');
-  assert.ok(/No ads and no tracking/.test(g), 'the no-ads, no-tracking line');
-  assert.ok(!/mitznsimz\.com/i.test(g + page), 'always .co.uk, never .com');
-  assert.ok(!/utm_|[?&]ref=/i.test(g + page), 'no tracking tags on links');
-  const blank = (g + page).match(/target="_blank"[^>]*>/g) || [];
-  assert.ok(blank.every(t => t.includes('rel="noopener noreferrer"')), 'every new-tab link has rel="noopener noreferrer": ' + blank.filter(t => !t.includes('noreferrer')).join(' '));
-  assert.ok(/from === 'pause' \? '' : '<p class="support-line">'/.test(g), 'the front-screen line is left out when the tavern is opened from a paused battle');
-  assert.ok(/won && !mode && !next \? '<p class="support-line">' \+ KOFI_LINE/.test(g), 'the end screen carries it only when a whole campaign is won');
-});
-
-test('quick on a big screen: no backdrop blur, the board rests under a menu, minis drawn when needed, a pixel budget that learns', () => {
-  const g = read('game.js'), page = read('index.html');
-  const build = g.slice(g.indexOf('function buildSprites()'), g.indexOf('function spr(type)'));
-  assert.ok(build && !/TableMinis\.sprite\(/.test(build), 'buildSprites no longer draws every mini up front');
-  assert.ok(/function spr\(type\) \{\s*return SPR\[type\] \|\|/.test(g) && /function sprW\(type\) \{ return SPRW\[type\] \|\|/.test(g), 'a mini is drawn the first time it is needed');
-  assert.ok(!/SPR\[st\.sp\.type\]|SPR\[selected\]|SPR\.__bear/.test(g), 'nothing reads a sprite without going through spr()');
-  assert.ok(/const BOARD_PIXELS = WEBKIT \? 1\.0e6 : 4\.2e6;/.test(g) && /Math\.sqrt\(boardBudget\(\) \/ \(W \* H\)\)/.test(g), 'the board keeps to its pixel budget: about a million pixels in Safari and on iPhones and iPads, 4.2 million elsewhere');
-  const kp = g.slice(g.indexOf('function keepPace(ts)'), g.indexOf('function frame(ts)'));
-  assert.ok(/median <= 24 \|\| L\.dpr <= 1\.01/.test(kp) && /cv\.width \* cv\.height \* f\)/.test(kp) && /const f = clamp\(20 \/ median, 0\.25, 0\.8\)/.test(kp) && /saveSettings\(\)/.test(kp), 'slow frames in a battle take the board straight to about what the browser can draw at 50 fps, never below 1x, and it is remembered');
-  assert.ok(/ts - pace\.from < 1000/.test(kp) && /gap < 5000/.test(kp) && /pace\.from = 0; pace\.counting = false;/.test(g), 'judged every second of battle, counted afresh after each layout, even at 1 fps');
-  assert.ok(/const dt = Math\.min\(0\.25,/.test(g), 'a slow browser still plays at the right speed: up to a quarter of a second of game time a frame');
-  assert.ok(/if \(st\.sp\.stone\) ctx\.filter = 'none';/.test(g) && !/^\s*ctx\.filter = 'none';/m.test(g), 'only a mini turned to stone touches the canvas filter');
-  assert.ok(/function warmSprites\(\)/.test(g) && /warmSprites\(\);\n  \}/.test(g), "this battle's minis are drawn when the board is laid out, not mid-fight");
-  assert.ok(/\['perf', 'Frame timings',/.test(g) && /#perf\{/.test(page), 'Frame timings can be switched on in Settings');
-  const draws = g.match(/ctx\.drawImage\([^;]*/g) || [];
-  assert.ok(draws.length >= 5 && draws.every(d => /^ctx\.drawImage\(img\(/.test(d)), 'every image drawn on the board goes through img(), the bitmap fast path: ' + draws.filter(d => !/img\(/.test(d)).join(' | '));
-  assert.ok(/createImageBitmap\(cv\)\.then\(x => BM\.set\(cv, x\), \(\) => BM\.set\(cv, 2\)\)/.test(g), 'a bitmap that fails keeps the canvas');
-  assert.ok(!/setLineDash|lineDashOffset\s*=/.test(g.replace(/\/\/[^\n]*/g, '')), "no canvas dashes: Safari's are very slow, so routes and rings are dashed by hand");
-  assert.ok(!/\.board\{[^}]*overflow:hidden/.test(page) && /#board\{[^}]*will-change:transform/.test(page), 'the board canvas is on a layer of its own, not clipped live by the page');
-  assert.ok(/g\.fillStyle = '#000'; g\.globalCompositeOperation = 'destination-in'/.test(g), 'the rounded corners are cut with an opaque fill, or the whole board image fades');
-  assert.ok(/body::before\{[^}]*position:fixed[^}]*will-change:transform/.test(page) && !/body\{[^}]*repeating-linear-gradient/.test(page), "the table's grain is painted once, on a layer of its own");
-  assert.ok(/if \(el\.dataset\.cool !== v\)/.test(g) && /setAttrIf\(b, 'aria-pressed'/.test(g), 'the panels touch the page only when something changed');
-  assert.ok(/function strokeDashed\(pts, on, off, offset\)/.test(g) && /strokeDashed\(pts, dash\[0\], dash\[1\], -now \* c \* 0\.5\)/.test(g), 'the routes march as before, dashed by hand');
-  assert.ok(/if \(capped\(t\.median\) && capped\(median\)\) \{ pace\.off = true; SET\.boardPx = t\.budget/.test(kp), 'a step is undone only when a battery saver holds frames to 30 a second');
-  assert.ok(/if \(!covered && started && !paused && S\.phase === 'running'\) keepPace\(ts\)/.test(g), 'only battle frames are timed');
-  assert.ok(!/backdrop-filter/.test(page), 'no backdrop-filter: blurring a full-window board every frame made every menu slow');
-  assert.ok(/if \(!covered \|\| ts - coveredAt < 1500\) \{\s*const now = clock\(\);\s*runImpacts\(now\);\s*draw\(now\);/.test(g), 'under a menu, the board settles for a moment and then stops redrawing');
-  assert.ok(/coveredFor = null; \/\/ redraw the board, even under a menu/.test(g), 'a resize redraws the board once, even under a menu');
-  // the battle never runs under a menu: Settings opens only from the tavern or the pause screen
-  assert.ok(!/showSettings\((?!\(\) => showTavern|showPause)/.test(g.replace(/function showSettings\(/, '')), 'Settings opens only from the tavern or the pause screen');
-});
+// How the page looks and behaves in a browser (the support line, menus, the board's pixels, Safari's slow paths) is
+// tested in tests/browser.test.js, against the running game rather than its source.
 
 console.log('\n' + table.map(r => '       ' + r).join('\n'));
 for (const dk of ['easy', 'medium', 'hard', 'deadly']) if (tally[dk])

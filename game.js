@@ -34,14 +34,14 @@
   const DEATH = { animatedArmour: 'crumble', ironSentinel: 'crumble', clayGolem: 'crumble', stoneColossus: 'crumble', gargoyle: 'crumble', skeleton: 'crumble', skelArcher: 'crumble', risen: 'crumble', boneTitan: 'crumble',
     barricade: 'crumble', ballista: 'crumble', font: 'crumble', wraith: 'drift', shadeWisp: 'drift', emberWisp: 'drift', shade: 'drift', gloom: 'melt', gelCube: 'melt' };
   const HIT_SOUND = { metal: 'clang', bone: 'crack', stone: 'crack', wood: 'crack', ooze: 'squish', spirit: 'whiff', ember: 'thud', flesh: 'thud' };
-  const VERSION = '1.7.16'; // shown in the credits, so testers can say which version they were playing
+  const VERSION = '1.8.0'; // shown in the credits, so testers can say which version they were playing
   const UIF = '"Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif';
 
   const cv = $('board'), ctx = cv.getContext('2d');
   const tcv = $('track'), tctx = tcv.getContext('2d');
 
   let S = null, acc = 0, speed = 1, diceOn = true, paused = false, started = false, autoOn = false, lastAutoRound = -1;
-  let selected = null, hover = null, lastTs = 0;
+  let selected = null, hover = null, lastTs = 0, drawCount = 0; // drawCount: boards drawn, for the browser tests
   // Safari, and every browser on an iPhone or iPad (they're all Safari underneath), draws a canvas much more slowly than
   // Chrome or Firefox: on a Mac laptop a full-window board at 2x ran at 17 frames a second and at 1x at 58. So WebKit
   // starts with a budget of about a million board pixels (1x to 1.14x on a laptop window, nearer 2x on a phone).
@@ -1176,6 +1176,7 @@
 
   /* ---------- drawing ---------- */
   function draw(now) {
+    drawCount++;
     const c = L.cell;
     V.now = now;
     prof.mark('wait'); // anything the browser was still doing from before: the last frame, say
@@ -1671,7 +1672,7 @@
   function drawTrack(now) {
     const dpr = L ? L.dpr : 1, w = tcv.clientWidth, h = tcv.clientHeight;
     if (!w || !h) return;
-    if (tcv.width !== Math.round(w * dpr) || tcv.height !== Math.round(h * dpr)) { tcv.width = Math.round(w * dpr); tcv.height = Math.round(h * dpr); }
+    setIf(tcv, 'width', Math.round(w * dpr)); setIf(tcv, 'height', Math.round(h * dpr)); // a canvas is cleared by any size write, even to the same size
     const g = tctx; g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
     g.textBaseline = 'middle'; g.textAlign = 'left';
     g.font = '600 11px ' + UIF; g.fillStyle = '#b8a78a'; g.fillText('ROUND', 0, h / 2 + 1);
@@ -1748,8 +1749,8 @@
     for (const type of HERO_ORDER) {
       const b = $('card-' + type); if (!b) continue;
       if (S.free) { const el = b.querySelector('.left'), t = '× ' + (S.free[type] || 0); if (el && el.textContent !== t) el.textContent = t; }
-      b.disabled = !affords(type) || S.phase !== 'running' || recharging(type);
-      b.setAttribute('aria-pressed', selected === type ? 'true' : 'false');
+      setIf(b, 'disabled', !affords(type) || S.phase !== 'running' || recharging(type));
+      setAttrIf(b, 'aria-pressed', selected === type ? 'true' : 'false');
     }
   }
   // the shade over a recharging card drains away as the rounds pass
@@ -2086,7 +2087,7 @@
   function updatePowers() {
     updateGate();
     const box = $('cats'); if (!box) return;
-    box.hidden = !(S && S.powers);
+    setIf(box, 'hidden', !(S && S.powers));
     if (box.hidden) return;
     for (const k in S.powers) {
       const b = $('pw-' + k), left = Math.max(0, S.powers[k].ready - S.round);
@@ -2854,6 +2855,14 @@
     requestAnimationFrame(frame);
   }
 
+  // For the browser tests (tests/browser.test.js): a read-only look at the view, and a faster clock so a battle can be
+  // played to the end in seconds. The game itself never uses it.
+  window.HTL_VIEW = Object.freeze({
+    info: () => ({ version: VERSION, webkit: WEBKIT, budget: boardBudget(), board: [cv.width, cv.height], dpr: L ? L.dpr : 0,
+      draws: drawCount, sprites: Object.keys(SPR).length, monsterTypes: Object.keys(PACK.monsters).length, adaptOff: !!pace.off,
+      phase: S ? S.phase : null, battle: S ? S.battle : null, started, paused, time: S ? S.time : 0 }),
+    speed: n => { speed = n; }
+  });
   const hot = window.claude && window.claude.hot;
   if (hot && hot.snapshot) hot.snapshot(() => ({ S: JSON.parse(JSON.stringify(Object.assign({}, S, { events: [] }))), speed, diceOn, started, autoOn }));
   if (hot && hot.probe) hot.probe({ gpos, squareAt, state: () => S }); // read-only, for checks run from outside the page
