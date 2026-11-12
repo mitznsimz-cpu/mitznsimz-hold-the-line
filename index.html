@@ -180,8 +180,12 @@ button:focus-visible{outline:2px solid var(--gold-hi);outline-offset:2px}
 .tabs button{min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);color:var(--ink-dim);font:700 14px var(--ui);cursor:pointer}
 .tabs button[aria-pressed="true"]{background:var(--gold);border-color:var(--gold);color:#22160f}
 .trophies{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.trophy{display:grid;gap:3px;padding:10px 12px;border-radius:8px;background:var(--panel-2);border:1px dashed var(--line);opacity:.62}
+.trophy{display:grid;grid-template-columns:52px minmax(0,1fr);align-items:center;gap:12px;padding:10px 12px;border-radius:8px;background:var(--panel-2);border:1px dashed var(--line);opacity:.62}
 .trophy.got{opacity:1;border:1px solid var(--gold);box-shadow:inset 0 0 0 1px rgba(212,165,55,.25)}
+.trophy>div{display:grid;gap:3px}
+.trophy .plaque{display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.5))}
+.gains li.trophy-gain{display:flex;align-items:center;gap:10px;padding-left:0}
+.gains li.trophy-gain::before{display:none}
 .trophy b{font:700 15.5px/1.2 var(--ui)}
 .trophy span{font:500 13.5px/1.3 var(--ui);color:var(--ink-dim)}
 .trophy em{font:700 12px/1 var(--ui);font-style:normal;color:var(--gold-hi)}
@@ -390,6 +394,7 @@ button:focus-visible{outline:2px solid var(--gold-hi);outline-offset:2px}
 <script src="view/draw.js"></script>
 <script src="view/motes.js"></script>
 <script src="view/floors.js"></script>
+<script src="view/plaques.js"></script>
 <script src="view/hud.js"></script>
 <script src="view/tavern.js"></script>
 <script src="view/app.js"></script>

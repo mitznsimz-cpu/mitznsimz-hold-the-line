@@ -1509,6 +1509,18 @@ test('every battle\'s theme has a floor: a Delve zone or one of the house\'s own
   }
 });
 
+test('every trophy has a plaque, mounting a mini the pack has or an emblem that can be drawn', () => {
+  const P = vm.runInContext('const TAU = Math.PI * 2;\n' + read('view/plaques.js') + '\n;({ PLAQUES, EMBLEMS })', vm.createContext({}));
+  const TR = sandbox.HTL_CAMPAIGN.TROPHIES;
+  for (const t of TR) {
+    const p = P.PLAQUES[t.id];
+    assert.ok(p, 'the trophy ' + t.id + ' has no plaque');
+    if (p.mini) assert.ok(HTL.MONSTERS[p.mini] || HTL.HEROES[p.mini], t.id + ': no mini called ' + p.mini);
+    else assert.ok(P.EMBLEMS[p.emblem], t.id + ': no emblem called ' + p.emblem);
+  }
+  for (const id of Object.keys(P.PLAQUES)) assert.ok(TR.some(t => t.id === id), 'a plaque for a trophy that does not exist: ' + id);
+});
+
 // ---------- offline ----------
 test('the offline worker keeps every file the page loads, and only those', () => {
   const page = read('index.html'), sw = read('sw.js');
@@ -1608,7 +1620,7 @@ test('every monster card says what each of its traits does', () => {
 
 // ---------- coverage: every mini fights somewhere ----------
 test('the page loads the shared minis, then the pack, then the rules, then the game', () => {
-  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'simz.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/motes.js', 'view/floors.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
+  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'simz.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/motes.js', 'view/floors.js', 'view/plaques.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
   assert.ok(order.every(i => i > 0), 'a script tag is missing: ' + order);
   assert.ok(order.every((i, k) => !k || i > order[k - 1]), 'scripts load out of order');
   assert.ok(!/MINI CORE START/.test(page), 'the page should load mitznsimz_minis.js, not carry a copy');

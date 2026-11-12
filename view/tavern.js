@@ -316,7 +316,7 @@ function showTrophies(from, tab) {
   let body = '';
   if (tab === 'trophies') {
     body = '<div class="trophies">' + CAMP.TROPHIES.map(t => { const got = camp.trophies[t.id];
-      return '<div class="trophy' + (got ? ' got' : '') + '"><b>' + t.name + '</b><span>' + t.text + '</span><em>' + (got ? 'Won ' + got : (t.reward ? '+' + t.reward + ' takings' : '')) + '</em></div>'; }).join('') + '</div>';
+      return '<div class="trophy' + (got ? ' got' : '') + '"><canvas class="plaque" data-p="' + t.id + '" aria-hidden="true"></canvas><div><b>' + t.name + '</b><span>' + t.text + '</span><em>' + (got ? 'Won ' + got : (t.reward ? '+' + t.reward + ' takings' : '')) + '</em></div></div>'; }).join('') + '</div>';
   } else if (tab === 'beasts') {
     const where = t => { const b = HTL.BATTLES.find(x => x.monsters.indexOf(t) >= 0); return b ? b.name : ''; };
     body = '<p class="lede">' + met.length + ' of ' + Object.keys(M).length + ' met.</p><div class="beasts">' + Object.keys(M).sort((a, b) => M[a].level - M[b].level).map(t => {
@@ -341,6 +341,7 @@ function showTrophies(from, tab) {
   o.hidden = false;
   o.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => showTrophies(from, b.dataset.tab)));
   o.querySelectorAll('.beast canvas').forEach(c => miniInto(c, c.dataset.t, 54));
+  o.querySelectorAll('canvas.plaque').forEach(c => drawPlaque(c, c.dataset.p, !!camp.trophies[c.dataset.p], 52));
   $('btnBack').addEventListener('click', () => showTavern(from));
   o.querySelector('.tabs button[aria-pressed="true"]').focus();
 }
@@ -622,7 +623,7 @@ function showEnd(won) {
     const why = rm ? (rm.kind === 'reverse' ? 'for taking the tavern' : rm.kind === 'endless' ? 'for ' + rm.waves + (rm.waves === 1 ? ' wave' : ' waves') : rm.kind === 'daily' ? 'for today’s win' : rm.kind === 'rush' ? 'for the Boss Rush' : 'for solving it')
       : won ? (r.best ? 'for the win' : 'for a replay') : 'the cats found all the same';
     if (pay) gains.push('<li><b>' + coins(pay) + '</b> ' + why + '</li>');
-    r.trophies.forEach(t => gains.push('<li>Trophy: <b>' + t.name + '</b>' + (t.reward ? ' (+' + t.reward + ')' : '') + '</li>'));
+    r.trophies.forEach(t => gains.push('<li class="trophy-gain"><canvas class="plaque" data-p="' + t.id + '" aria-hidden="true"></canvas><span>Trophy: <b>' + t.name + '</b>' + (t.reward ? ' (+' + t.reward + ')' : '') + '</span></li>'));
     r.joined.forEach(t => gains.push('<li><b>' + PACK.heroes[t].name + '</b> joins the regulars.</li>'));
     r.items.forEach(id => gains.push('<li>Found: <b>' + HTL.ITEMS[id].name + '</b>. Give it to someone in the armoury.</li>'));
     r.rooms.forEach(id => { const room = CAMP.ROOMS.find(x => x.id === id); if (room) gains.push('<li><b>' + room.name + '</b> is open.</li>'); });
@@ -643,6 +644,7 @@ function showEnd(won) {
     '</div>' + (gains.length ? '<ul class="gains">' + gains.join('') + '</ul>' : '') + '<div class="btnrow">' + buttons + '</div>' +
     (won && !mode && !next ? '<p class="support-line">' + KOFI_LINE + '</p>' : '') + '</div>';
   o.hidden = false;
+  o.querySelectorAll('.gains canvas.plaque').forEach(c => drawPlaque(c, c.dataset.p, true, 34));
   if ($('btnNext')) $('btnNext').addEventListener('click', () => (nextPuzzle ? showPuzzle(nextPuzzle, 'end') : showParty(next.id, 'end')));
   if ($('btnAgain')) $('btnAgain').addEventListener('click', () => newGame(mode === 'endless' ? MODES.endlessId(newSeed()) : b.id, true, Object.assign({}, lastOpts, CAMP.battleOptions(camp))));
   if ($('btnGames')) $('btnGames').addEventListener('click', () => showGames('end'));

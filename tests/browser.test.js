@@ -199,6 +199,15 @@ test('each battle is laid with its themed floor, Settings goes back to the mat, 
   assert(!page.errors.length, page.errors.join('\n'));
   await page.ctx.close();
 });
+test('the trophy wall hangs a plaque for every trophy, won or not', async () => {
+  const page = await open({ campaign: true });
+  await page.click('.room[data-room="trophies"]');
+  const r = await page.evaluate(() => ({ n: HTL_CAMPAIGN.TROPHIES.length, drawn: [...document.querySelectorAll('#overlay canvas.plaque')].filter(c => c.width > 0).length,
+    got: document.querySelectorAll('#overlay .trophy.got canvas.plaque').length }));
+  assert(r.drawn === r.n && r.n >= 30, 'plaques: ' + JSON.stringify(r));
+  assert(!page.errors.length, page.errors.join('\n'));
+  await page.ctx.close();
+});
 test('Export saves the campaign to a file, and Import brings it back after asking, keeping the old one aside', async () => {
   const page = await open({ campaign: true });
   await page.click('#btnSettings');
