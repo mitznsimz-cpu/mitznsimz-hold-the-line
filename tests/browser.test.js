@@ -182,6 +182,23 @@ test('the minis are lit, their poses are lit in the background before the fighti
   assert(!page.errors.length, page.errors.join('\n'));
   await page.ctx.close();
 });
+test('each battle is laid with its themed floor, Settings goes back to the mat, and without WebGL 2 the mat stays', async () => {
+  let page = await open();
+  await battle(page, 'cellar', 'warren', { auto: false });
+  let f = (await info(page)).floor;
+  assert(f && f.theme === 'damp' && f.px > 16, 'the warren is laid with damp flagstones: ' + JSON.stringify(f));
+  await page.click('#btnPause');
+  await page.click('#overlay button:has-text("Settings")');
+  await page.click('[data-set="floors"]');
+  assert((await info(page)).floor === null, 'off: the vinyl mat');
+  assert(!page.errors.length, page.errors.join('\n'));
+  await page.ctx.close();
+  page = await open({ before: [() => { const get = HTMLCanvasElement.prototype.getContext; HTMLCanvasElement.prototype.getContext = function (k, o) { return k === 'webgl2' ? null : get.call(this, k, o); }; }] });
+  await battle(page, 'cellar', 'warren', { auto: false });
+  assert((await info(page)).floor === null && (await info(page)).started, 'no WebGL 2: the mat, and the battle runs');
+  assert(!page.errors.length, page.errors.join('\n'));
+  await page.ctx.close();
+});
 test('Export saves the campaign to a file, and Import brings it back after asking, keeping the old one aside', async () => {
   const page = await open({ campaign: true });
   await page.click('#btnSettings');
