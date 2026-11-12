@@ -3,6 +3,12 @@
 'use strict';
 
 /* ---------- simulation events become animation ---------- */
+// Every event the rules send (HTL.EVENTS) is a case below, or is here with the reason the board needs nothing for it.
+// The tests check that no event is left out of both.
+const SHOWN_FROM_STATE = {
+  round: 'the round counter reads S.round', trap: 'traps are drawn from S.traps', trapGone: 'traps are drawn from S.traps',
+  fork: 'the next square is enough: the monster just moves on', waveCleared: 'the wave banner and the break come with rest'
+};
 function onEvent(ev) {
   trackFeats(ev);
   switch (ev.type) {

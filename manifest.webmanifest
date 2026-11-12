@@ -1,0 +1,17 @@
+{
+  "name": "Mitz & Simz: Hold the Line",
+  "short_name": "Hold the Line",
+  "description": "Hold the tavern door against the monsters coming up from the cellar: a lane-defence game with unpainted D&D minis.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1E1B16",
+  "theme_color": "#1E1B16",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
