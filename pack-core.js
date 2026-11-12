@@ -124,7 +124,8 @@ HTL_PACKS.core = (function () {
      paralyse (a hit can freeze a hero for a turn), split (divides in two when first badly hurt),
      summon { type, every, max }, mend { every, n, d } (heals a wounded monster nearby), boss,
      undead (the Cleric's Sacred Flame does double damage), small (three can share a square where a battle is
-     crowded, as swarms do in 5e), fiend (holy water burns it as it burns the dead). The rules (sim.js) list the rest. */
+     crowded, as swarms do in 5e), fiend (holy water burns it as it burns the dead). Every trait, with its card text
+     and where its rules are, is listed in TRAITS in sim.js; a trait not listed there fails the tests. */
 
   // Headline monsters carry extra hit points so they last long enough to show what they do against a full board.
   const MONSTERS = {
