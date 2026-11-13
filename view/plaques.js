@@ -14,7 +14,10 @@ const PLAQUES = {
   deadlylair: { mini: 'redDragon' }, alldeadly: { emblem: 'crown' }, endless10: { emblem: 'candle' }, endless25: { emblem: 'moon' },
   daily: { emblem: 'sun' }, rush: { emblem: 'hourglass' }, reverse: { mini: 'goblin' }, reverseall: { mini: 'lodger' },
   ringhold: { emblem: 'horseshoe' }, dryland: { mini: 'thingInWell' }, mown: { mini: 'lawnThing' }, strike: { emblem: 'barrel' },
-  puzzles: { emblem: 'cog' }
+  puzzles: { emblem: 'cog' },
+  // the cellar editor's
+  firstPlans: { emblem: 'quill' }, proof: { mini: 'fighter' }, petard: { emblem: 'bomb' }, simzApproves: { emblem: 'paw' },
+  simzStumped: { emblem: 'question' }, guestCellar: { emblem: 'envelope' }, masterBuilder: { emblem: 'compass' }
 };
 
 // the emblems, each drawn as one path in a box from -1 to 1, cast in brass
@@ -44,6 +47,13 @@ const EMBLEMS = {
   hourglass: g => { g.rect(-0.6, -0.9, 1.2, 0.15); g.rect(-0.6, 0.75, 1.2, 0.15); g.moveTo(-0.45, -0.75); g.lineTo(0.45, -0.75); g.lineTo(0.08, 0); g.lineTo(0.45, 0.75); g.lineTo(-0.45, 0.75); g.lineTo(-0.08, 0); g.closePath(); },
   horseshoe: g => { g.arc(0, -0.1, 0.72, Math.PI * 0.85, Math.PI * 0.15); g.lineTo(0.75, 0.85); g.lineTo(0.42, 0.85); g.lineTo(0.42, 0.15); g.arc(0, -0.1, 0.42, Math.PI * 0.12, Math.PI * 0.88, true); g.lineTo(-0.42, 0.85); g.lineTo(-0.75, 0.85); g.closePath(); },
   barrel: g => { g.moveTo(-0.5, -0.8); g.quadraticCurveTo(-0.85, 0, -0.5, 0.8); g.lineTo(0.5, 0.8); g.quadraticCurveTo(0.85, 0, 0.5, -0.8); g.closePath(); },
+  quill: g => { g.moveTo(0.75, -0.9); g.bezierCurveTo(0.2, -0.75, -0.35, -0.2, -0.45, 0.45); g.lineTo(-0.62, 0.9); g.lineTo(-0.3, 0.55); g.bezierCurveTo(0.25, 0.3, 0.6, -0.3, 0.75, -0.9); g.closePath(); },
+  bomb: g => { g.arc(-0.1, 0.18, 0.62, 0, TAU); g.moveTo(0.28, -0.32); g.rect(0.18, -0.52, 0.28, 0.26); g.moveTo(0.5, -0.62); g.quadraticCurveTo(0.7, -0.95, 0.9, -0.8); g.lineTo(0.84, -0.72); g.quadraticCurveTo(0.7, -0.85, 0.56, -0.58); g.closePath(); },
+  paw: g => { g.ellipse(0, 0.35, 0.48, 0.4, 0, 0, TAU); for (const [x, y] of [[-0.62, -0.18], [-0.24, -0.58], [0.24, -0.58], [0.62, -0.18]]) { g.moveTo(x + 0.2, y); g.ellipse(x, y, 0.2, 0.26, 0, 0, TAU); } },
+  question: g => { g.arc(0, -0.32, 0.52, Math.PI * 1.05, Math.PI * 0.5); g.lineTo(0.12, 0.3); g.lineTo(-0.12, 0.3); g.lineTo(-0.12, 0.0); g.arc(0, -0.32, 0.28, Math.PI * 0.5, Math.PI * 1.05, true); g.closePath();
+    g.moveTo(0.16, 0.66); g.arc(0, 0.66, 0.16, 0, TAU); },
+  envelope: g => { g.rect(-0.85, -0.55, 1.7, 1.1); },
+  compass: g => { g.moveTo(0, -0.9); g.arc(0, -0.72, 0.18, -Math.PI / 2, Math.PI * 1.5); g.moveTo(-0.1, -0.6); g.lineTo(-0.62, 0.9); g.lineTo(-0.44, 0.9); g.lineTo(0, -0.42); g.lineTo(0.44, 0.9); g.lineTo(0.62, 0.9); g.lineTo(0.1, -0.6); g.closePath(); },
   cog: g => { for (let k = 0; k < 16; k++) { const a = k * TAU / 16, r = k % 2 ? 0.62 : 0.88; g[k ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); g.moveTo(0.28, 0); g.arc(0, 0, 0.28, 0, TAU, true); }
 };
 // a few lines cast into some emblems, drawn over the brass
@@ -51,6 +61,8 @@ const EMBLEM_LINES = {
   d20: g => { const p = k => { const a = -Math.PI / 2 + k * TAU / 6; return [Math.cos(a) * 0.9, Math.sin(a) * 0.9]; }, t = [[0, -0.5], [-0.45, 0.3], [0.45, 0.3]];
     g.moveTo(...t[0]); g.lineTo(...t[1]); g.lineTo(...t[2]); g.closePath(); for (const [i, j] of [[0, 0], [1, 0], [5, 0], [2, 1], [3, 1], [3, 2], [4, 2]]) { g.moveTo(...p(i)); g.lineTo(...t[j]); } },
   door: g => { for (const x of [-0.2, 0.15]) { g.moveTo(x, -0.6); g.lineTo(x, 0.85); } },
+  envelope: g => { g.moveTo(-0.85, -0.55); g.lineTo(0, 0.1); g.lineTo(0.85, -0.55); },
+  compass: g => { g.moveTo(-0.4, 0.3); g.quadraticCurveTo(0, 0.55, 0.4, 0.3); },
   barrel: g => { for (const y of [-0.45, 0.45]) { g.moveTo(-0.66, y); g.lineTo(0.66, y); } },
   book: g => { g.moveTo(0, -0.55); g.lineTo(0, 0.65); },
   skull: g => { g.moveTo(-0.08, 0.5); g.lineTo(0.08, 0.5); }

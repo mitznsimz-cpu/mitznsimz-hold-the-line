@@ -9,7 +9,7 @@ const KC = typeof HTL_CELLARS !== 'undefined' ? HTL_CELLARS : null;
 // the cellars drawn in this browser: [{ id, saved, cellar }], newest first
 function loadCellars() {
   try { const raw = JSON.parse(localStorage.getItem(CELLARS_KEY) || '[]');
-    return Array.isArray(raw) ? raw.map(x => x && { id: String(x.id), saved: String(x.saved || ''), cellar: KC.clean(x.cellar) }).filter(x => x && x.cellar).slice(0, 30) : []; }
+    return Array.isArray(raw) ? raw.map(x => x && { id: String(x.id), saved: String(x.saved || ''), cellar: KC.clean(x.cellar), friend: !!x.friend }).filter(x => x && x.cellar).slice(0, 30) : []; }
   catch (e) { return []; }
 }
 function saveCellars(list) { try { localStorage.setItem(CELLARS_KEY, JSON.stringify(list.slice(0, 30))); } catch (e) { /* full: the drawing stays on screen */ } }
@@ -24,15 +24,33 @@ function showDrawingBoard(from) {
   const o = $('overlay'), list = loadCellars();
   o.innerHTML = '<div class="panel wide" role="dialog" aria-labelledby="ovTitle"><span class="eyebrow">Mitz’s drawing board</span><h2 id="ovTitle">Cellars of your own</h2>' +
     '<p class="persona"><span>Mitz:</span> The landlord gave me the plans. Draw a cellar, fill it with monsters, and see if it holds. Nothing down here counts for the takings, mind.</p>' +
-    (list.length ? '<div class="items cellar-list">' + list.map(x => '<div class="item"><b>' + esc(x.cellar.name) + '</b><span>' + x.cellar.rows.length + ' rows by ' + x.cellar.rows[0].length +
-      ', ' + (KC.THEMES.find(([k]) => k === x.cellar.theme) || [0, ''])[1].toLowerCase() + (x.saved ? '. Drawn ' + x.saved : '') + '</span><div class="btnrow">' +
-      '<button class="secondary" type="button" data-open="' + x.id + '">Open</button><button class="secondary" type="button" data-del="' + x.id + '">Throw away</button></div></div>').join('') + '</div>'
+    (list.length ? '<div class="items cellar-list">' + list.map(x => '<div class="item"><b>' + esc(x.cellar.name) + (x.friend ? ' <em>From a friend</em>' : KC.canShare(x.cellar) ? ' <em>Beaten on Medium</em>' : '') + '</b><span>' +
+      x.cellar.rows.length + ' rows by ' + x.cellar.rows[0].length + ', ' + x.cellar.waves.length + (x.cellar.waves.length === 1 ? ' wave' : ' waves') + ', ' +
+      (KC.THEMES.find(([k]) => k === x.cellar.theme) || [0, ''])[1].toLowerCase() + (x.saved ? '. ' + (x.friend ? 'Added ' : 'Drawn ') + x.saved : '') + '</span><div class="btnrow">' +
+      '<button class="secondary" type="button" data-open="' + x.id + '">' + (x.friend ? 'Play it' : 'Open') + '</button><button class="secondary" type="button" data-del="' + x.id + '">Throw away</button></div></div>').join('') + '</div>'
       : '<p class="diff-line">No cellars yet. Start with a plain floor and draw on it.</p>') +
-    '<div class="btnrow"><button class="primary" id="btnNewCellar" type="button">Draw a new cellar</button><button class="secondary" id="btnBack" type="button">Back to the tavern</button></div></div>';
+    '<p class="diff-line" id="impMsg" role="status"></p>' +
+    '<div class="btnrow"><button class="primary" id="btnNewCellar" type="button">Draw a new cellar</button><button class="secondary" id="btnImportCellar" type="button">Import a cellar</button>' +
+    '<input id="impCellar" type="file" accept=".json,application/json,text/plain" hidden><button class="secondary" id="btnBack" type="button">Back to the tavern</button></div></div>';
   o.hidden = false;
   $('btnNewCellar').addEventListener('click', () => { drawing = { id: 'c' + Date.now().toString(36), cellar: KC.blank() }; keepDrawing(); showEditor(from); });
   $('btnBack').addEventListener('click', () => showTavern(from));
-  o.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => { const x = loadCellars().find(y => y.id === b.dataset.open); if (x) { drawing = { id: x.id, cellar: x.cellar }; showEditor(from); } }));
+  o.querySelectorAll('[data-open]').forEach(b => b.addEventListener('click', () => {
+    const x = loadCellars().find(y => y.id === b.dataset.open); if (!x) return;
+    drawing = { id: x.id, cellar: x.cellar, friend: !!x.friend };
+    if (!x.friend) return showEditor(from);
+    const id = KC.play(x.cellar); if (id) showParty(id, 'board'); // a friend's cellar is played as it came, not drawn on
+  }));
+  $('btnImportCellar').addEventListener('click', () => $('impCellar').click());
+  $('impCellar').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    f.text().then(text => {
+      const got = KC.importText(text);
+      if (got.error) { $('impMsg').textContent = got.error; return; }
+      const list = loadCellars(); list.unshift({ id: 'f' + Date.now().toString(36), saved: today(), cellar: got.cellar, friend: true }); saveCellars(list);
+      showDrawingBoard(from); $('impMsg').textContent = got.cellar.name + ' is in. Play it from the list.';
+    }, () => { $('impMsg').textContent = 'That file couldn’t be opened.'; });
+  });
   o.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
     const x = loadCellars().find(y => y.id === b.dataset.del); if (!x) return;
     b.parentNode.innerHTML = '<span class="diff-line">Throw away ' + esc(x.cellar.name) + '?</span><button class="primary" type="button" data-sure="1">Throw it away</button><button class="secondary" type="button" data-keep="1">Keep it</button>';
@@ -44,8 +62,29 @@ function showDrawingBoard(from) {
 // every change is kept at once: there is no Save to forget
 function keepDrawing() {
   const list = loadCellars().filter(x => x.id !== drawing.id);
-  list.unshift({ id: drawing.id, saved: today(), cellar: drawing.cellar });
+  list.unshift({ id: drawing.id, saved: today(), cellar: drawing.cellar, friend: !!drawing.friend });
   saveCellars(list);
+  if (drawing.friend) return;
+  edTrophy('firstPlans');
+  if (list.filter(x => !x.friend).length >= 10) edTrophy('masterBuilder');
+}
+// the editor's trophies: worth no gold, but on the wall all the same
+function edTrophy(id) {
+  const t = CAMP.cellarTrophy(camp, id, today()); if (!t) return;
+  saveCamp(); hint('Trophy: ' + t.name + '. ' + t.text, 3200, 'Trophy');
+}
+// back from a cellar's battle or party screen: to the drawing, or to the list for a friend's cellar
+function cellarBack() { if (drawing && !drawing.friend) showEditor('end'); else showDrawingBoard('end'); }
+// a cellar's battle is over: its seals and trophies
+function cellarFinished(won) {
+  if (!drawing) return;
+  const c = drawing.cellar, d = S.difficulty;
+  if (drawing.friend) { if (won) edTrophy('guestCellar'); return; }
+  if (!won) { edTrophy('petard'); return; }
+  edTrophy('proof');
+  if (d === 'medium') KC.markBeaten(c, 'you');
+  if (d === 'deadly') { KC.markDeadly(c, { you: true }); if (c.deadly.simz === 0) edTrophy('simzStumped'); }
+  keepDrawing();
 }
 const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
 
@@ -65,6 +104,9 @@ function showEditor(from) {
     '</div><h3 class="pick">Waves</h3><p class="diff-line">Only monsters you have met below can be sent. Rounds count from the start of each wave.</p><div class="ed-waves" id="edWaves"></div>' +
     '<div class="btnrow"><button class="secondary" id="btnAddWave" type="button">Add a wave</button></div>' +
     '<div class="ed-checks" id="edChecks" aria-live="polite"></div>' +
+    '<h3 class="pick">Test and share</h3><div class="ed-trial" id="edTrial" aria-live="polite"></div>' +
+    '<div class="btnrow"><button class="secondary" id="btnTrial" type="button">Let Simz try it</button><button class="secondary" id="btnExportCellar" type="button">Export it</button></div>' +
+    '<p class="diff-line" id="edShare"></p>' +
     '<div class="btnrow"><button class="primary" id="btnPlayCellar" type="button">Play it</button><button class="secondary" id="btnMine" type="button">My cellars</button>' +
     '<button class="secondary" id="btnBack" type="button">Back to the tavern</button></div></div>';
   o.hidden = false;
@@ -79,6 +121,14 @@ function showEditor(from) {
   $('edForks').addEventListener('change', e => { c.forks = e.target.checked; edChanged(); });
   $('edRoutes').addEventListener('change', e => { pen.routes = e.target.checked; edRefresh(); });
   $('btnMine').addEventListener('click', () => showDrawingBoard(from));
+  $('btnTrial').addEventListener('click', runTrial);
+  $('btnExportCellar').addEventListener('click', () => {
+    if (!KC.canShare(c)) { edShare(true); return; }
+    const url = URL.createObjectURL(new Blob([KC.exportText(c)], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = 'cellar-' + (c.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'mine') + '.json';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+    $('edShare').textContent = 'Exported: look for ' + a.download + ' in your downloads, and send it to a friend to import in their drawing board.';
+  });
   $('btnAddWave').addEventListener('click', () => {
     if (c.waves.length >= KC.LIMITS.waves) return;
     const first = metTypes()[0] || 'goblin';
@@ -98,8 +148,47 @@ function showEditor(from) {
   grid.addEventListener('pointermove', e => { if (down) paintAt(document.elementFromPoint(e.clientX, e.clientY)?.closest('.ed-sq')); });
   window.addEventListener('pointerup', () => { down = false; }, { once: false });
   grid.addEventListener('keydown', e => { const el = e.target.closest('.ed-sq'); if (el && (e.key === 'Enter' || e.key === ' ')) { paintAt(el); e.preventDefault(); } });
-  edRefresh(); edWaves();
+  edRefresh(); edWaves(); edShare();
   $('edName').focus();
+}
+// whether it can be shared yet, and why not
+function edShare(nudge) {
+  const c = drawing.cellar, el = $('edShare'); if (!el) return;
+  const ok = KC.canShare(c);
+  $('btnExportCellar').setAttribute('aria-disabled', String(!ok));
+  el.textContent = ok ? 'Beaten on Medium by ' + (c.beaten.by === 'simz' ? 'Simz' : 'you') + ', so it can be shared: Export it makes a small file for a friend to import.'
+    : 'Beat it on Medium, or let Simz beat it, before you share it: nobody wants a cellar that can’t be held.' + (nudge ? ' ' : '');
+  if (nudge) { el.classList.add('shake'); setTimeout(() => el.classList.remove('shake'), 400); }
+}
+// Simz plays it five times on each difficulty, a game at a time between frames, and says where it gave
+let trialRun = 0;
+function runTrial() {
+  const c = drawing.cellar, run = ++trialRun, box = $('edTrial'), btn = $('btnTrial');
+  if (!KC.play(c, { met: metTypes() })) { edChecks(); box.innerHTML = '<p class="ed-bad">Sort out the problems above first.</p>'; return; }
+  const key = KC.layoutKey(c), jobs = [], res = {}, leaks = {};
+  for (const d of KC.TRIAL_DIFFS) { res[d] = 0; for (const seed of KC.TRIAL_SEEDS) jobs.push([d, seed]); }
+  btn.disabled = true; let done = 0;
+  const step = () => {
+    if (run !== trialRun || !document.body.contains(box)) return; // left the editor, or started again
+    if (KC.layoutKey(c) !== key) { btn.disabled = false; box.innerHTML = '<p class="ed-note">The cellar changed while Simz was playing. Try again.</p>'; return; }
+    const [d, seed] = jobs[done], r = KC.trialGame(c, d, seed);
+    if (r.won) res[d]++;
+    for (const l in r.leaks) leaks[l] = (leaks[l] || 0) + r.leaks[l];
+    done++;
+    box.innerHTML = '<p class="ed-note">Simz is playing it: game ' + done + ' of ' + jobs.length + '…</p>';
+    if (done < jobs.length) { setTimeout(step, 0); return; }
+    btn.disabled = false;
+    const n = KC.TRIAL_SEEDS.length, worst = Object.keys(leaks).sort((a, b) => leaks[b] - leaks[a])[0];
+    if (res.medium) KC.markBeaten(c, 'simz');
+    KC.markDeadly(c, { simz: res.deadly });
+    if (res.deadly) edTrophy('simzApproves'); else if (c.deadly.you) edTrophy('simzStumped');
+    keepDrawing(); edShare();
+    box.innerHTML = '<div class="ed-results">' + KC.TRIAL_DIFFS.map(d => '<div><span class="lbl">' + HTL.DIFFICULTY[d].name + '</span><b>' + res[d] + ' of ' + n + '</b></div>').join('') + '</div>' +
+      '<p class="persona"><span>Simz:</span> ' + (res.easy === 0 ? 'I couldn’t hold it even on Easy. Is it meant to be fair?' : res.deadly === n ? 'Held it every time, even on Deadly. You could make it nastier.' :
+        res.medium === n ? 'Held it every time on Medium.' : res.medium ? 'I held it on Medium, mostly.' : 'It beat me on Medium.') +
+      (worst != null ? ' Most got through on row ' + (+worst + 1) + '.' : ' Nothing got through the door.') + '</p>';
+  };
+  setTimeout(step, 0);
 }
 // the monsters you have met, easiest first: the only ones a cellar of yours can send
 function metTypes() {
@@ -152,7 +241,7 @@ function edWaves() {
     }));
   });
 }
-function edChanged(quiet) { keepDrawing(); if (!quiet) edRefresh(); else edChecks(); }
+function edChanged(quiet) { keepDrawing(); if (!quiet) edRefresh(); else edChecks(); edShare(); } // a changed cellar must be beaten again to share
 function edRefresh() {
   const c = drawing.cellar, grid = $('edGrid'); if (!grid) return;
   const ch = KC.check(c, { met: metTypes() }), onRoute = {};
