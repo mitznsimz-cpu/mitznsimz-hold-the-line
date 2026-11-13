@@ -31,7 +31,7 @@ function showTavern(from) {
   const status = { cellar: n + ' of ' + total + ' won', trophies: Object.keys(camp.trophies).length + ' of ' + CAMP.TROPHIES.length + ' trophies',
     works: buyable ? buyable + (buyable === 1 ? ' upgrade' : ' upgrades') + ' to buy' : 'Nothing you can afford yet',
     armoury: camp.items.length + ' of ' + Object.keys(HTL.ITEMS).length + ' found', cats: (CAMP.duty(camp) === 'mitz' ? 'Mitz' : 'Simz') + ' is on watch next',
-    games: MODES ? modeStatus('daily') : '', house: CAMP.HOUSE.filter(id => CAMP.won(camp, id)).length + ' of ' + CAMP.HOUSE.length + ' won' };
+    games: MODES ? modeStatus('daily') : '', board: (n => n ? n + (n === 1 ? ' cellar' : ' cellars') + ' drawn' : 'Nothing drawn yet')(typeof loadCellars === 'function' ? loadCellars().length : 0), house: CAMP.HOUSE.filter(id => CAMP.won(camp, id)).length + ' of ' + CAMP.HOUSE.length + ' won' };
   o.innerHTML = '<div class="panel wide hub" role="dialog" aria-labelledby="ovTitle">' +
     '<span class="eyebrow">Mitz &amp; Simz’s tavern</span><h2 id="ovTitle">The Cat &amp; Mouse</h2>' +
     '<p class="persona"><span>' + cat.who + ':</span> ' + cat.line + '</p>' +
@@ -54,7 +54,7 @@ function showTavern(from) {
     const r = btn.dataset.room;
     if (r === 'cellar') showCellar(from); else if (r === 'trophies') showTrophies(from, 'trophies'); else if (r === 'works') showWorks(from);
     else if (r === 'armoury') showArmoury(from); else if (r === 'cats') showCats(from); else if (r === 'games' && MODES) showGames(from);
-    else if (r === 'house') showHouse(from);
+    else if (r === 'house') showHouse(from); else if (r === 'board') showDrawingBoard(from);
   }));
   if ($('btnBack')) $('btnBack').addEventListener('click', showPause);
   $('btnSettings').addEventListener('click', () => showSettings(() => showTavern(from), from !== 'pause'));
@@ -374,6 +374,7 @@ function trackFeats(ev) {
 }
 function finishBattle(won) {
   if (V.recorded) return; V.recorded = true;
+  if (HTL.battle(S).mode === 'cellar') { V.result = null; return; } // a cellar of your own counts for nothing in the campaign
   const F = V.feats || freshFeats();
   const b = HTL.battle(S), md = b.mode && MODES ? { mode: b.mode, waves: MODES.held(S), date: b.date, score: MODES.dailyScore(S), puzzle: b.index, lives: S.lives, theme: b.theme } : {};
   if (b.reverse) { F.slain = {}; F.placed = {}; } // in Reverse the heroes were Simz's, and the slain were yours
@@ -450,7 +451,7 @@ function showParty(battleId, from) {
     miniInto(x.parentNode.querySelector('canvas'), t, 40); sync();
   }));
   $('btnCats').addEventListener('click', () => { pick = sug.pick.slice(); sync(); });
-  $('btnBack').addEventListener('click', () => (b.mode ? showGames(from) : b.stage === 2 ? showHouse(from) : showCellar(from)));
+  $('btnBack').addEventListener('click', () => (b.mode === 'cellar' ? showEditor('tavern') : b.mode ? showGames(from) : b.stage === 2 ? showHouse(from) : showCellar(from)));
   let warned = false; // without a Bard nothing earns gold: say so once, then go if they still want to
   $('btnGo').addEventListener('click', () => {
     if (pick.indexOf('bard') < 0 && roster.indexOf('bard') >= 0 && !warned) { warned = true; hint('No Bard in the party: nothing will earn gold but the bounties. Press again to go anyway.', 5000); return; }
@@ -606,6 +607,7 @@ function showEnd(won) {
   const line = mode === 'endless' ? 'Held for ' + held + (held === 1 ? ' wave' : ' waves') + (rm && rm.best ? '. That’s a new best.' : '. ' + (camp.modes.endless > held ? 'The best is still ' + camp.modes.endless + '.' : 'Not bad at all.'))
     : mode === 'daily' ? 'Today’s score: ' + score + '. ' + (rm && rm.best ? 'Your best today.' : 'Your best today is still ' + (camp.modes.daily[b.date] || {}).score + '.')
     : mode === 'puzzle' ? (won ? 'That’s the way through.' : 'One got past. Have a think and try again.')
+    : mode === 'cellar' ? (won ? 'It holds. Want to make it nastier?' : 'They got through. Back to the drawing board.')
     : mode === 'reverse' ? (won ? 'Fine. Fair play. The drinks are on me.' : 'Told you. Nobody gets past me.')
     : won ? (next || mode ? 'Drinks are on the house. Well, on the Bard.' : cp && cp.house ? 'The whole house is quiet, cellar to rafters. The lodger has moved out, and the drinks are on the house.' : 'That was everything under the tavern. Drinks are on the house, forever.')
           : 'Everyone roll up a new character. Same time next week?';
@@ -613,7 +615,7 @@ function showEnd(won) {
   const nextOpen = won && next && CAMP.unlocked(camp, next.id);
   if (mode) buttons = (nextPuzzle ? '<button class="primary" id="btnNext" type="button">Next puzzle</button>' : '') +
     '<button class="' + (nextPuzzle ? 'secondary' : 'primary') + '" id="btnAgain" type="button">' + (mode === 'endless' ? 'Another night' : 'Try again') + '</button>' +
-    '<button class="secondary" id="btnGames" type="button">Back to the back room</button><button class="secondary" id="btnChoose" type="button">Back to the tavern</button>';
+    '<button class="secondary" id="btnGames" type="button">' + (mode === 'cellar' ? 'Back to the drawing board' : 'Back to the back room') + '</button><button class="secondary" id="btnChoose" type="button">Back to the tavern</button>';
   else if (nextOpen) buttons = '<button class="primary" id="btnNext" type="button">Next: ' + next.name + '</button><button class="secondary" id="btnChoose" type="button">Back to the tavern</button>';
   else if (won) buttons = '<button class="primary" id="btnChoose" type="button">Back to the tavern</button><button class="secondary" id="btnAgain" type="button">Play again</button>';
   else buttons = '<button class="primary" id="btnAgain" type="button">Try again</button><button class="secondary" id="btnChoose" type="button">Back to the tavern</button>';
@@ -647,7 +649,7 @@ function showEnd(won) {
   o.querySelectorAll('.gains canvas.plaque').forEach(c => drawPlaque(c, c.dataset.p, true, 34));
   if ($('btnNext')) $('btnNext').addEventListener('click', () => (nextPuzzle ? showPuzzle(nextPuzzle, 'end') : showParty(next.id, 'end')));
   if ($('btnAgain')) $('btnAgain').addEventListener('click', () => newGame(mode === 'endless' ? MODES.endlessId(newSeed()) : b.id, true, Object.assign({}, lastOpts, CAMP.battleOptions(camp))));
-  if ($('btnGames')) $('btnGames').addEventListener('click', () => showGames('end'));
+  if ($('btnGames')) $('btnGames').addEventListener('click', () => (mode === 'cellar' ? showEditor('end') : showGames('end')));
   $('btnChoose').addEventListener('click', () => showTavern('end'));
   (($('btnNext') || $('btnAgain') || $('btnChoose'))).focus();
 }

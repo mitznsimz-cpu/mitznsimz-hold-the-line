@@ -91,6 +91,7 @@ The page loads its scripts in this order:
 | `mitznsimz_minis.js` | The shared minis library (core 2.5.0), with Hold the Line's adapter at the end, which also lights the board's minis (after the Delve's relief lighting) |
 | `motion.js` | How the minis move, and the effects between them: arrows, spells, hit-stop, particles, the tumbling d20, the cats' paws (1.1.0) |
 | `sound.js` | Sound, all made in the browser; no audio files (1.0.0) |
+| `cellars.js` | Cellars of your own, the rules side of Mitz's Drawing Board: the tiles, the checks in plain words, and turning a drawing into a battle (`cellar:<key>`). Tested headless |
 | `msdd_materials.js` | The Dungeon Delve's materials and zones, copied across as it is: the themed floors bake from it |
 | `pack-core.js` | Content: heroes, paths, monsters, maps, battles, items |
 | `sim.js` | The rules engine: placement, combat, traits (`TRAITS`), the events it sends (`EVENTS`), suggested parties |
@@ -103,6 +104,7 @@ The page loads its scripts in this order:
 | `view/draw.js` | Drawing the board each frame, in depth order, with the effects on top |
 | `view/floors.js` | Each battle's mat laid with stone, cobbles, tiles or boards from its theme: the Delve's materials baked once with WebGL 2, lit, and kept as a picture. Without WebGL 2, the vinyl mat |
 | `view/plaques.js` | The trophy plaques: walnut with a brass plate, mounting a mini or a cast-brass emblem; trophies not yet won hang dark |
+| `view/drawingboard.js` | Mitz's Drawing Board, the cellar editor: paint a floor, see the monsters' routes, play it. Cellars are kept in the browser apart from the campaign and earn nothing in it. Opens when the Red Wyrm's Lair is won |
 | `view/motes.js` | Dust, drips, embers, spores, leaves or snow drifting over the board, from each battle's theme (after the Delve's particles) |
 | `view/hud.js` | The battle's panels: the initiative track, the HUD and hero tray, the belt, the cats' powers, a mini's card, the next wave |
 | `view/tavern.js` | The Cat & Mouse between battles: the hub and every room, and the common room where a party is picked |

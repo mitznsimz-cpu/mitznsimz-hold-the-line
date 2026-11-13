@@ -26,9 +26,11 @@ var HTL_CAMPAIGN = (function (HTL) {
     { id: 'armoury', name: 'The armoury', wins: 1, line: 'Magic items won below, each given to one kind of hero, and the belt of things to throw.' },
     { id: 'cats', name: 'The cats’ corner', wins: 2, line: 'Mitz pounces, Simz swats. One of them is on watch each battle.' },
     { id: 'games', name: 'The back room', wins: 3, line: 'Endless, the Daily Challenge, the Boss Rush and the puzzles.' },
+    { id: 'board', name: 'Mitz’s drawing board', wins: 0, needs: HOUSE_OPENS, shut: 'Locked away. Mitz gets the cellar plans when the Red Wyrm’s Lair is won.',
+      line: 'Draw a cellar of your own, fill it with monsters, and see if it holds.' },
     { id: 'house', name: 'The house plan', wins: 0, needs: HOUSE_OPENS, shut: 'Boarded up. Opens when the Red Wyrm’s Lair is won.',
       line: 'The monsters have found the other ways in. The rest of the Cat & Mouse, part by part.' }
-  ].filter(r => r.id !== 'house' || HOUSE.length);
+  ].filter(r => (r.id !== 'house' || HOUSE.length) && (r.id !== 'board' || typeof HTL_CELLARS !== 'undefined'));
   const PUZZLE_COUNT = typeof HTL_MODES !== 'undefined' ? HTL_MODES.PUZZLES.length : 0;
 
   /* ---------- magic items: the first win of each battle brings one up from below ---------- */

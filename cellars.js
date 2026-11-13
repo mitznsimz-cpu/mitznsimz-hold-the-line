@@ -1,0 +1,138 @@
+/* Hold the Line: cellars of your own. The rules side of Mitz's Drawing Board (the page's side is view/board-editor.js).
+   A cellar is plain data: a floor drawn in the same characters as the pack's maps, a theme, the starting gold and its
+   waves. check() says in plain words what stops it being played, and what is worth knowing; play() turns it into a
+   battle the rules run like any other (battle id 'cellar:<key>', where the key is a fingerprint of the cellar, so a
+   changed cellar is a new battle and the same cellar always plays the same). Loaded after modes.js; tested headless. */
+var HTL_CELLARS = (function (HTL) {
+  'use strict';
+  const VERSION = 1;
+  const LIMITS = { rows: [3, 9], len: [6, 14], waves: 7, perWave: 40, gold: [50, 400], name: 40 };
+
+  // what can be drawn, in the order the palette shows it, and what each does (as the pack's own maps say)
+  const TILES = [
+    { ch: '.', name: 'Floor', tip: 'Anyone can walk here, and heroes can stand here.' },
+    { ch: '#', name: 'Pillar', tip: 'Nothing stands here, and it blocks the line of sight along its row.' },
+    { ch: '~', name: 'Water', tip: 'Walkers take twice as long to wade through. Heroes can stand in it.' },
+    { ch: '^', name: 'High ground', tip: 'A hero standing here gets +2 to hit.' },
+    { ch: '+', name: 'Holy ground', tip: 'Undead that start a turn here take radiant damage.' },
+    { ch: 'o', name: 'Pit', tip: 'Walkers go round it, flyers cross it. Nobody can stand on it.' },
+    { ch: '%', name: 'Hedge', tip: 'Walkers go round, flyers go over, nobody stands in it; everyone sees over it.' },
+    { ch: '=', name: 'Ice', tip: 'Walkers slide across twice as fast. Nobody can stand on it.' },
+    { ch: '*', name: 'Oven', tip: 'A wall that flares every few rounds, burning whatever stands beside it.' },
+    { ch: 'G', name: 'Gate', tip: 'A way through, until you drop it in battle for a few rounds.' },
+    { ch: 'D', name: 'Door', tip: 'Monsters come in here. Nobody can stand on it.' },
+    { ch: 'H', name: 'Hatch', tip: 'Floor until a monster bursts up through it, and a door after.' },
+    { ch: '@', name: 'Well', tip: 'A way in out in the middle of the floor. Nobody can stand on it.' },
+    { ch: ' ', name: 'Outside', tip: 'Not part of the mat at all.' }
+  ];
+  const CHARS = TILES.map(t => t.ch).join('');
+  const WAYS_IN = 'DH@';
+  // the looks a cellar can have: the Delve's zones and the house's own (the same names as the pack's battles)
+  const THEMES = [['damp', 'Damp stone'], ['sunken', 'Flooded'], ['sewer', 'Sewer'], ['crypt', 'Crypt'], ['ossuary', 'Ossuary'], ['tomb', 'Tomb'],
+    ['dwarven', 'Dwarven halls'], ['mine', 'Mine'], ['fungal', 'Fungal caves'], ['lava', 'Forge and lava'], ['frost', 'Ice'], ['lodge', 'Old boards'],
+    ['kitchen', 'Kitchen tiles'], ['yard', 'Yard cobbles'], ['garden', 'Garden flags']];
+  // until v1.10.1 brings the wave builder, every cellar is tried against the same two waves of the Warren's monsters
+  const TRIAL_WAVES = [
+    { name: 'Rats and Kobolds', by: 'Mitz', line: 'A first look at how your cellar holds.', spawns: 'direRat:0*2 kobold:3 direRat:5*2 kobold:7 goblin:9*2' },
+    { name: 'Goblins', by: 'Simz', line: 'Now with archers and bats, to see where they get through.', spawns: 'goblin:0*2 goblinArcher:2 caveBat:4*2 goblin:6*2 goblinArcher:8 kobold:10*2 goblin:12*2' }
+  ];
+
+  function blank() {
+    return { v: VERSION, name: 'A cellar of my own', theme: 'damp', forks: false, gold: 150,
+      rows: ['.........D', '.........D', '.........D', '.........D', '.........D'], waves: TRIAL_WAVES.map(w => Object.assign({}, w)) };
+  }
+  // a cellar from anywhere (storage, a file): the right shape, or null
+  function clean(raw) {
+    if (!raw || typeof raw !== 'object' || !Array.isArray(raw.rows) || !raw.rows.length) return null;
+    const c = blank();
+    c.name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, LIMITS.name) : c.name;
+    c.theme = THEMES.some(([k]) => k === raw.theme) ? raw.theme : c.theme;
+    c.forks = !!raw.forks;
+    c.gold = Math.min(LIMITS.gold[1], Math.max(LIMITS.gold[0], Math.round(+raw.gold) || c.gold));
+    const len = Math.min(LIMITS.len[1], Math.max(LIMITS.len[0], Math.max.apply(null, raw.rows.map(r => String(r).length))));
+    c.rows = raw.rows.slice(0, LIMITS.rows[1]).map(r => String(r).slice(0, len).padEnd(len, ' ').replace(new RegExp('[^' + CHARS.replace(/[\]^\\-]/g, '\\$&') + ']', 'g'), '.'));
+    while (c.rows.length < LIMITS.rows[0]) c.rows.push(' '.repeat(len));
+    if (Array.isArray(raw.waves) && raw.waves.length) c.waves = raw.waves.slice(0, LIMITS.waves).filter(w => w && typeof w.spawns === 'string')
+      .map(w => ({ name: String(w.name || 'A wave').slice(0, LIMITS.name), by: w.by === 'Simz' ? 'Simz' : 'Mitz', line: String(w.line || '').slice(0, 140), spawns: w.spawns }));
+    if (!c.waves.length) c.waves = TRIAL_WAVES.map(w => Object.assign({}, w));
+    return c;
+  }
+
+  /* ---------- drawing ---------- */
+  function paint(c, lane, sq, ch) {
+    if (CHARS.indexOf(ch) < 0 || !c.rows[lane] || sq < 0 || sq >= c.rows[lane].length) return false;
+    const r = c.rows[lane]; if (r[sq] === ch) return false;
+    c.rows[lane] = r.slice(0, sq) + ch + r.slice(sq + 1);
+    return true;
+  }
+  // a row more or fewer (at the far side), a square longer or shorter (the doors stay at the far end)
+  function resize(c, dRows, dLen) {
+    const len = c.rows[0].length, h = c.rows.length;
+    if (dLen > 0 && len < LIMITS.len[1]) c.rows = c.rows.map(r => r.slice(0, -1) + (r[len - 1] === ' ' ? ' ' : '.') + r.slice(-1));
+    if (dLen < 0 && len > LIMITS.len[0]) c.rows = c.rows.map(r => r.slice(0, -2) + r.slice(-1));
+    if (dRows > 0 && h < LIMITS.rows[1]) c.rows.push('.'.repeat(c.rows[0].length - 1) + 'D');
+    if (dRows < 0 && h > LIMITS.rows[0]) c.rows.pop();
+    return c;
+  }
+
+  /* ---------- the checks ---------- */
+  const rowName = l => 'row ' + (l + 1), at = (l, q) => rowName(l) + ', square ' + (q + 1);
+  // { ok, problems: [words], notes: [words], map: the floor as the rules see it (or null), routes: [[{lane, sq}...] per way in] }
+  function check(c) {
+    const problems = [], notes = [], out = { ok: false, problems, notes, map: null, routes: [] };
+    if (!c || !Array.isArray(c.rows)) { problems.push('There is no floor.'); return out; }
+    const h = c.rows.length, len = c.rows[0].length;
+    if (h < LIMITS.rows[0] || h > LIMITS.rows[1]) problems.push('A cellar has ' + LIMITS.rows[0] + ' to ' + LIMITS.rows[1] + ' rows.');
+    if (len < LIMITS.len[0] || len > LIMITS.len[1]) problems.push('A cellar is ' + LIMITS.len[0] + ' to ' + LIMITS.len[1] + ' squares long.');
+    if (c.rows.some(r => r.length !== len)) { problems.push('Every row must be the same length.'); return out; }
+    if (c.rows.some(r => [...r].some(ch => CHARS.indexOf(ch) < 0))) { problems.push('Something on the floor isn’t a tile the game knows.'); return out; }
+    const ways = []; c.rows.forEach((r, l) => [...r].forEach((ch, q) => { if (WAYS_IN.indexOf(ch) >= 0) ways.push({ lane: l, sq: q, ch }); }));
+    if (!ways.length) problems.push('There’s no way in: draw a door, a hatch or a well for the monsters.');
+    if (ways.length > 8) problems.push('No more than 8 ways in, or the monsters can’t be counted out fairly.');
+    if (!c.rows.some(r => HTL.PLACEABLE.indexOf(r[0]) >= 0 || '=G'.indexOf(r[0]) >= 0)) problems.push('The tavern side (the left edge) needs at least one square of floor, so the monsters have somewhere to aim for.');
+    const stand = c.rows.reduce((n, r) => n + [...r].filter(ch => HTL.PLACEABLE.indexOf(ch) >= 0 && ch !== 'H').length, 0);
+    if (stand < 6) problems.push('Heroes need somewhere to stand: at least 6 squares of floor, water, high or holy ground.');
+    let map = null;
+    try { map = HTL.trialMap({ name: c.name, rows: c.rows, forks: c.forks }); } catch (e) { problems.push('The floor can’t be read: ' + e.message); }
+    if (map) {
+      out.map = map;
+      ways.forEach((w, i) => {
+        if (!isFinite(map.distWalk[w.lane][w.sq])) { problems.push('The ' + (w.ch === 'D' ? 'door' : w.ch === 'H' ? 'hatch' : 'well') + ' at ' + at(w.lane, w.sq) + ' has no way through to the tavern.'); out.routes.push([]); return; }
+        const path = []; let p = { lane: w.lane, sq: w.sq }, guard = 0;
+        while (p && !p.exit && guard++ < 400) { path.push({ lane: p.lane, sq: p.sq }); p = map.nextWalk[p.lane][p.sq]; }
+        out.routes.push(path);
+        void i;
+      });
+      const shortest = Math.min.apply(null, ways.map(w => map.distWalk[w.lane][w.sq]).filter(isFinite));
+      if (isFinite(shortest) && shortest <= 4) notes.push('The nearest way in is only ' + Math.round(shortest) + ' squares from the tavern. That’s a hard cellar to hold.');
+      if (map.oven) notes.push('The ovens flare every few rounds on the squares beside them.');
+      if (map.gate) notes.push('The gate can be dropped in battle to hold the monsters back for a few rounds.');
+      if (ways.some(w => w.ch === 'H')) notes.push('Hatches are floor until a monster bursts up through one.');
+    }
+    if (!(c.name || '').trim()) problems.push('Give the cellar a name.');
+    out.ok = !problems.length;
+    return out;
+  }
+
+  /* ---------- playing it ---------- */
+  function fingerprint(c) { // the same cellar, the same key
+    const str = JSON.stringify([c.name, c.theme, c.forks, c.gold, c.rows, c.waves.map(w => [w.name, w.spawns])]);
+    let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+    return (h >>> 0).toString(36);
+  }
+  const READY = {}; // key → the cellar, for the battle maker
+  HTL.addMaker('cellar', key => {
+    const c = READY[key]; if (!c) return null;
+    const map = HTL.addMap('cellar-' + key, { name: c.name, rows: c.rows, forks: c.forks });
+    return { name: c.name, theme: c.theme, map: map.id, gold: c.gold, by: 'Mitz', line: 'A cellar of your own drawing. Let’s see if it holds.',
+      waves: c.waves.map(w => ({ name: w.name, by: w.by, line: w.line, spawns: w.spawns })) };
+  });
+  // the battle id for a cellar that passes its checks, or null
+  function play(c) {
+    const ch = check(c); if (!ch.ok) return null;
+    const key = fingerprint(c); READY[key] = JSON.parse(JSON.stringify(c));
+    return 'cellar:' + key;
+  }
+  return { VERSION, LIMITS, TILES, THEMES, TRIAL_WAVES, blank, clean, paint, resize, check, play, fingerprint };
+})(HTL);
+if (typeof module !== 'undefined' && module.exports) module.exports = HTL_CELLARS;

@@ -64,7 +64,7 @@ var HTL = (function (P) {
   const STEPS = [[0, -1], [-1, 0], [1, 0], [0, 1]];
   const EXIT = { exit: true };
 
-  function compileMap(id, src) {
+  function compileMap(id, src, lenient) { // lenient: a floor still being drawn, so a door with no way through is reported, not thrown
     const rows = src.rows, h = rows.length, w = rows[0].length;
     if (rows.some(r => r.length !== w)) throw new Error('Hold the Line: map ' + id + ' has rows of different lengths');
     const doors = [], hatches = {}, doorAt = {};
@@ -77,8 +77,10 @@ var HTL = (function (P) {
     map.nextWalk = walk.next; map.nextFly = fly.next; map.distWalk = walk.dist;
     map.nextSwim = swim.next; // the amphibious take the straight way, water or not
     map.fields = { walk, fly, swim };
-    doors.forEach((dr, i) => { if (!isFinite(walk.dist[dr.lane][dr.sq])) throw new Error('Hold the Line: door ' + i + ' of map ' + id + ' has no way to the tavern'); });
-    if (!doors.length) throw new Error('Hold the Line: map ' + id + ' has no doors');
+    if (!lenient) {
+      doors.forEach((dr, i) => { if (!isFinite(walk.dist[dr.lane][dr.sq])) throw new Error('Hold the Line: door ' + i + ' of map ' + id + ' has no way to the tavern'); });
+      if (!doors.length) throw new Error('Hold the Line: map ' + id + ' has no doors');
+    }
     // Phase 7: what a floor can hold beyond its shape. A hatch is a door that starts shut; ovens flare on the squares in
     // front of them; barrels roll down the chutes; the yard gate can be dropped; on a fork, monsters take the weaker way.
     if (Object.keys(hatches).length) { map.hatches = hatches; map.doorAt = doorAt; }
@@ -1695,6 +1697,10 @@ var HTL = (function (P) {
     return addBattle(def);
   }
   function addMaker(kind, fn) { MAKERS[kind] = fn; }
+  // floors drawn after the pack loaded (the cellar editor, cellars.js): trialMap compiles one as it is drawn, without
+  // throwing; addMap compiles a finished one and makes it a map battles can use
+  function trialMap(src) { return compileMap('trial', src, true); }
+  function addMap(id, src) { if (!MAP_BY_ID[id]) MAP_BY_ID[id] = compileMap(id, src); return MAP_BY_ID[id]; }
   // wave i of a battle, made now if the battle is endless
   function waveOf(b, i) { while (b.endless && b.waves.length <= i) b.waves.push(compileWave(b, b.more(b.waves.length))); return b.waves[i]; }
   const lastWave = b => (b.endless ? Infinity : b.waves.length - 1);
@@ -1703,7 +1709,7 @@ var HTL = (function (P) {
   return { ROUND, PACK, TRAITS, WINDUP, HEROES, MONSTERS, BATTLES, MAPS: MAP_BY_ID, STATUSES, PATHS, DIFFICULTY, PARTY, HERO_TYPES, DEFENDER_TYPES, tavernOf, ITEMS, POWERS, usePower, powerTargets, itemOf, _heroAttack: heroAttack, trapAt,
     newGame, step, place, canPlace, recall, refundOf, preview, levelUp, upgradeCost, suggestLoadout, unitAt, addUnit, battle, mapOf, cellAt, describe, parseSpawns,
     addStatus, hasStatus, nearestAhead, heroInReach,
-    battleById: id => makeBattle(id), addMaker, waveOf, send, canSend, sendCost, THROWS, throwItem, canThrow,
+    battleById: id => makeBattle(id), addMaker, trialMap, addMap, PLACEABLE, waveOf, send, canSend, sendCost, THROWS, throwItem, canThrow,
     canShutGate, shutGate, stepOf, sunlit, setKeeper, EVENTS, _attack: attack, _fireball: fireball,
     // what a player of the rules (Simz, in simz.js) may look at: questions about the board, none of which change it
     look: Object.freeze({ PLACEABLE, SIGHT_BLOCK, near, within, seen, free, placeable, monsterAt, clearRow, clearCol, isObject, traits }) };

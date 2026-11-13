@@ -111,6 +111,35 @@ button:focus-visible{outline:2px solid var(--gold-hi);outline-offset:2px}
 .how li::before{content:"";position:absolute;left:2px;top:.5em;width:7px;height:7px;background:var(--gold);transform:rotate(45deg)}
 .how b{color:var(--ink);font-weight:700}
 .panel.wide{max-width:660px}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Mitz's drawing board */
+.panel.editor{max-width:760px}
+.ed-name{display:grid;gap:4px;margin:8px 0 10px}
+.ed-name input,.ed-step select{font:600 18px/1.2 var(--ui);color:var(--ink);background:var(--table-2);border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+.ed-wrap{display:flex;gap:4px;align-items:stretch;overflow-x:auto;padding-bottom:4px}
+.ed-tavern{writing-mode:vertical-rl;transform:rotate(180deg);display:grid;place-items:center;padding:0 4px;border-radius:4px;background:#5a3a24;color:var(--gold-hi);font:600 11px/1 var(--ui);letter-spacing:.14em;text-transform:uppercase}
+.ed-grid{--ed-sq:clamp(24px, calc((min(100vw, 760px) - 110px) / 14), 44px);display:grid;gap:2px;touch-action:none;user-select:none}
+.ed-sq{width:var(--ed-sq);height:var(--ed-sq);display:grid;place-items:center;border-radius:3px;font:600 calc(var(--ed-sq) * .45)/1 var(--ui);color:rgba(241,231,210,.85);cursor:crosshair;box-shadow:inset 0 0 0 1px rgba(0,0,0,.25)}
+.ed-sq.out{box-shadow:inset 0 0 0 1px rgba(184,167,138,.18)}
+.ed-sq.route::after{content:"";width:28%;height:28%;border-radius:50%;background:var(--gold-hi);box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+.ed-sq:focus-visible{outline:2px solid var(--gold-hi);outline-offset:1px}
+.ed-pal{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px}
+.ed-tile{display:flex;align-items:center;gap:6px;padding:5px 9px 5px 5px;border-radius:6px;border:1px solid var(--line);background:transparent;color:var(--ink);font:600 13px/1 var(--ui);cursor:pointer}
+.ed-tile i{width:20px;height:20px;border-radius:3px;display:grid;place-items:center;font-style:normal;font-size:11px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+.ed-tile[aria-checked="true"]{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);background:var(--panel-2)}
+.ed-opts{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin:10px 0}
+.ed-step{display:flex;align-items:center;gap:6px}
+.ed-step b{min-width:2.2em;text-align:center;font:600 16px/1 var(--ui);font-variant-numeric:tabular-nums}
+.ed-step .secondary{min-height:34px;padding:0 12px}
+.ed-check{display:flex;align-items:center;gap:6px;color:var(--ink-dim);font:500 14px/1.3 var(--ui)}
+.ed-checks{display:grid;gap:4px;margin:6px 0 12px}
+.ed-checks p{margin:0;padding:6px 10px;border-radius:6px;font:500 14px/1.35 var(--ui)}
+.ed-ok{background:rgba(70,120,60,.25);color:#cfe8c4}
+.ed-bad{background:rgba(163,32,42,.25);color:#f3c6c6}
+.ed-note{background:rgba(212,165,55,.12);color:var(--ink-dim)}
+.ed-checks.shake{animation:edshake .35s}
+@keyframes edshake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.cellar-list .btnrow{margin-top:6px}
 .cats{display:flex;gap:6px;align-items:center}
 .deadly-note{display:none}
 .party.fixed{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -387,6 +416,7 @@ button:focus-visible{outline:2px solid var(--gold-hi);outline-offset:2px}
 <script src="sim.js"></script>
 <script src="simz.js"></script>
 <script src="modes.js"></script>
+<script src="cellars.js"></script>
 <script src="campaign.js"></script>
 <script src="view/core.js"></script>
 <script src="view/board.js"></script>
@@ -395,6 +425,7 @@ button:focus-visible{outline:2px solid var(--gold-hi);outline-offset:2px}
 <script src="view/motes.js"></script>
 <script src="view/floors.js"></script>
 <script src="view/plaques.js"></script>
+<script src="view/drawingboard.js"></script>
 <script src="view/hud.js"></script>
 <script src="view/tavern.js"></script>
 <script src="view/app.js"></script>

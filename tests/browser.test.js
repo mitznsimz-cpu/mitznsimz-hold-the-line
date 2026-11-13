@@ -208,6 +208,37 @@ test('the trophy wall hangs a plaque for every trophy, won or not', async () => 
   assert(!page.errors.length, page.errors.join('\n'));
   await page.ctx.close();
 });
+test('Mitz’s drawing board: draw a cellar, see where the monsters walk, play it, and the campaign is untouched', async () => {
+  const page = await open({ campaign: true });
+  const before = await page.evaluate(() => localStorage.getItem(HTL_CAMPAIGN.KEY));
+  await page.click('.room[data-room="board"]');
+  await page.click('#btnNewCellar');
+  await page.click('.ed-tile[data-ch="#"]');
+  for (const [l, q] of [[0, 4], [1, 4], [3, 4], [4, 4]]) await page.click('.ed-sq[data-l="' + l + '"][data-q="' + q + '"]');
+  assert((await page.$$('.ed-sq.route')).length > 20, 'the routes show');
+  assert(/Ready to play/.test(await page.textContent('#edChecks')), 'ready');
+  // seal the doors in and the checks say so, and Play it does nothing
+  for (const l of [0, 1, 2, 3, 4]) await page.click('.ed-sq[data-l="' + l + '"][data-q="8"]');
+  assert(/has no way through/.test(await page.textContent('#edChecks')), 'a sealed door is named');
+  await page.click('#btnPlayCellar'); assert(!(await page.$('#btnGo')), 'not played');
+  await page.click('.ed-tile[data-ch="."]');
+  for (const l of [0, 1, 2, 3, 4]) await page.click('.ed-sq[data-l="' + l + '"][data-q="8"]');
+  await page.fill('#edName', 'Test Cellar');
+  await page.click('#btnPlayCellar'); await page.click('#btnGo');
+  await page.waitForFunction(() => HTL_VIEW.info().started);
+  const id = (await info(page)).battle; assert(/^cellar:/.test(id), id);
+  await page.click('#btnAuto'); await page.evaluate(() => HTL_VIEW.speed(8));
+  await page.waitForFunction(() => HTL_VIEW.info().phase !== 'running', null, { timeout: 240000 });
+  await page.waitForSelector('#btnGames');
+  assert(/drawing board/i.test(await page.textContent('#btnGames')));
+  assert((await page.evaluate(() => localStorage.getItem(HTL_CAMPAIGN.KEY))) === before, 'the campaign is untouched');
+  await page.click('#btnGames');
+  assert((await page.inputValue('#edName')) === 'Test Cellar', 'back at the drawing');
+  await page.click('#btnMine');
+  assert(/Test Cellar/.test(await page.textContent('.cellar-list')), 'kept in My cellars');
+  assert(!page.errors.length, page.errors.join('\n'));
+  await page.ctx.close();
+});
 test('Export saves the campaign to a file, and Import brings it back after asking, keeping the old one aside', async () => {
   const page = await open({ campaign: true });
   await page.click('#btnSettings');
