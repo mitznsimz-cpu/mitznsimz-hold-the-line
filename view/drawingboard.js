@@ -62,7 +62,9 @@ function showEditor(from) {
       '<label class="ed-step"><span class="lbl">Looks like</span><select id="edTheme">' + KC.THEMES.map(([k, n]) => '<option value="' + k + '"' + (k === c.theme ? ' selected' : '') + '>' + n + '</option>').join('') + '</select></label>' +
       '<label class="ed-check"><input type="checkbox" id="edForks"' + (c.forks ? ' checked' : '') + '> On a fork, monsters take the way you guard least</label>' +
       '<label class="ed-check"><input type="checkbox" id="edRoutes"' + (pen.routes ? ' checked' : '') + '> Show the ways the monsters walk</label>' +
-    '</div><div class="ed-checks" id="edChecks" aria-live="polite"></div>' +
+    '</div><h3 class="pick">Waves</h3><p class="diff-line">Only monsters you have met below can be sent. Rounds count from the start of each wave.</p><div class="ed-waves" id="edWaves"></div>' +
+    '<div class="btnrow"><button class="secondary" id="btnAddWave" type="button">Add a wave</button></div>' +
+    '<div class="ed-checks" id="edChecks" aria-live="polite"></div>' +
     '<div class="btnrow"><button class="primary" id="btnPlayCellar" type="button">Play it</button><button class="secondary" id="btnMine" type="button">My cellars</button>' +
     '<button class="secondary" id="btnBack" type="button">Back to the tavern</button></div></div>';
   o.hidden = false;
@@ -77,9 +79,15 @@ function showEditor(from) {
   $('edForks').addEventListener('change', e => { c.forks = e.target.checked; edChanged(); });
   $('edRoutes').addEventListener('change', e => { pen.routes = e.target.checked; edRefresh(); });
   $('btnMine').addEventListener('click', () => showDrawingBoard(from));
+  $('btnAddWave').addEventListener('click', () => {
+    if (c.waves.length >= KC.LIMITS.waves) return;
+    const first = metTypes()[0] || 'goblin';
+    c.waves.push({ name: 'Wave ' + (c.waves.length + 1), by: c.waves.length % 2 ? 'Mitz' : 'Simz', line: '', spawns: first + ':0*2' });
+    edChanged(); edWaves(); const last = $('edWaves').querySelector('.ed-wave:last-child input'); if (last) last.focus();
+  });
   $('btnBack').addEventListener('click', () => showTavern(from));
   $('btnPlayCellar').addEventListener('click', () => {
-    const id = KC.play(c);
+    const id = KC.play(c, { met: metTypes() });
     if (!id) { edRefresh(); const box = $('edChecks'); box.classList.add('shake'); setTimeout(() => box.classList.remove('shake'), 400); return; } // what stops it, given a shake
     showParty(id, 'board');
   });
@@ -90,13 +98,64 @@ function showEditor(from) {
   grid.addEventListener('pointermove', e => { if (down) paintAt(document.elementFromPoint(e.clientX, e.clientY)?.closest('.ed-sq')); });
   window.addEventListener('pointerup', () => { down = false; }, { once: false });
   grid.addEventListener('keydown', e => { const el = e.target.closest('.ed-sq'); if (el && (e.key === 'Enter' || e.key === ' ')) { paintAt(el); e.preventDefault(); } });
-  edRefresh();
+  edRefresh(); edWaves();
   $('edName').focus();
+}
+// the monsters you have met, easiest first: the only ones a cellar of yours can send
+function metTypes() {
+  return Object.keys(camp.seen.monsters).filter(t => HTL.MONSTERS[t]).sort((a, b) => HTL.MONSTERS[a].level - HTL.MONSTERS[b].level || HTL.MONSTERS[a].name.localeCompare(HTL.MONSTERS[b].name));
+}
+// the waves, each a card: its name and line, its monsters (who, which round, how many, which way in), and how hard it is
+function edWaves() {
+  const c = drawing.cellar, box = $('edWaves'); if (!box) return;
+  const met = metTypes(), ways = (c.rows.join('').match(/[DH@]/g) || []).length;
+  const opt = (t, sel) => '<option value="' + t + '"' + (t === sel ? ' selected' : '') + '>' + esc(HTL.MONSTERS[t].name) + ' (level ' + HTL.MONSTERS[t].level + ')</option>';
+  box.innerHTML = c.waves.map((w, i) => {
+    const list = KC.entries(w), th = KC.threat(c, i);
+    return '<div class="ed-wave" data-w="' + i + '"><div class="ed-whead"><b>Wave ' + (i + 1) + '</b>' +
+      '<button class="secondary" type="button" data-wup="' + i + '" aria-label="Move wave ' + (i + 1) + ' earlier"' + (i ? '' : ' disabled') + '>↑</button>' +
+      '<button class="secondary" type="button" data-wdown="' + i + '" aria-label="Move wave ' + (i + 1) + ' later"' + (i < c.waves.length - 1 ? '' : ' disabled') + '>↓</button>' +
+      '<button class="secondary" type="button" data-wdel="' + i + '"' + (c.waves.length > 1 ? '' : ' disabled') + '>Remove</button></div>' +
+      '<label class="ed-field"><span class="lbl">Name</span><input type="text" maxlength="' + KC.LIMITS.name + '" data-wname="' + i + '" value="' + esc(w.name) + '"></label>' +
+      '<label class="ed-field"><span class="lbl">What ' + (w.by || 'Mitz') + ' says</span><input type="text" maxlength="140" data-wline="' + i + '" value="' + esc(w.line || '') + '" placeholder="A warning, a joke, a clue"></label>' +
+      '<div class="ed-spawns">' + list.map((e, k) => '<div class="ed-spawn" data-k="' + k + '">' +
+        '<select data-f="type" aria-label="Monster">' + (met.indexOf(e.type) < 0 ? opt(e.type, e.type) : '') + met.map(t => opt(t, e.type)).join('') + '</select>' +
+        '<span class="ed-mini"><span class="lbl">Round</span><button class="secondary" type="button" data-f="at" data-d="-1" aria-label="A round earlier">−</button><b>' + e.at + '</b><button class="secondary" type="button" data-f="at" data-d="1" aria-label="A round later">+</button></span>' +
+        '<span class="ed-mini"><span class="lbl">How many</span><button class="secondary" type="button" data-f="count" data-d="-1" aria-label="One fewer">−</button><b>' + e.count + '</b><button class="secondary" type="button" data-f="count" data-d="1" aria-label="One more">+</button></span>' +
+        '<select data-f="door" aria-label="Way in"><option value="">Any way in</option>' + Array.from({ length: Math.max(ways, e.door != null ? e.door + 1 : 0) }, (_, d) => '<option value="' + d + '"' + (e.door === d ? ' selected' : '') + '>Way in ' + (d + 1) + '</option>').join('') + '</select>' +
+        '<button class="secondary ed-x" type="button" data-f="del" aria-label="Take this one out">✕</button></div>').join('') + '</div>' +
+      '<div class="btnrow"><button class="secondary" type="button" data-wadd="' + i + '">Add a monster</button></div>' +
+      (th ? '<p class="ed-threat">About as tough as <b>' + esc(th.like.wave) + '</b> in ' + esc(th.like.battle) + '. ' + th.words + '</p>' : '') + '</div>';
+  }).join('');
+  const set = (i, list) => { c.waves[i].spawns = KC.spawnsOf(list); edChanged(true); edWaves(); edChecks(); };
+  box.querySelectorAll('[data-wname]').forEach(el => el.addEventListener('input', () => { c.waves[+el.dataset.wname].name = el.value; edChanged(true); }));
+  box.querySelectorAll('[data-wline]').forEach(el => el.addEventListener('input', () => { c.waves[+el.dataset.wline].line = el.value; edChanged(true); }));
+  box.querySelectorAll('[data-wdel]').forEach(el => el.addEventListener('click', () => { c.waves.splice(+el.dataset.wdel, 1); edChanged(true); edWaves(); edChecks(); }));
+  box.querySelectorAll('[data-wup],[data-wdown]').forEach(el => el.addEventListener('click', () => {
+    const i = +(el.dataset.wup || el.dataset.wdown), j = el.dataset.wup ? i - 1 : i + 1; [c.waves[i], c.waves[j]] = [c.waves[j], c.waves[i]];
+    edChanged(true); edWaves(); edChecks();
+  }));
+  box.querySelectorAll('[data-wadd]').forEach(el => el.addEventListener('click', () => {
+    const i = +el.dataset.wadd, list = KC.entries(c.waves[i]), last = list[list.length - 1];
+    list.push({ type: last ? last.type : (met[0] || 'goblin'), at: Math.min(KC.MAX_ROUND, last ? last.at + 2 : 0), count: 1, door: null }); set(i, list);
+  }));
+  box.querySelectorAll('.ed-spawn').forEach(row => {
+    const i = +row.closest('.ed-wave').dataset.w, k = +row.dataset.k;
+    row.querySelectorAll('[data-f]').forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'click', () => {
+      const list = KC.entries(c.waves[i]), e = list[k], f = el.dataset.f;
+      if (f === 'del') list.splice(k, 1); // an empty wave is allowed while drawing; the checks say it needs monsters
+      else if (f === 'type') e.type = el.value;
+      else if (f === 'door') e.door = el.value === '' ? null : +el.value;
+      else if (f === 'at') e.at = Math.min(KC.MAX_ROUND, Math.max(0, e.at + +el.dataset.d));
+      else if (f === 'count') e.count = Math.min(KC.MAX_COUNT, Math.max(1, e.count + +el.dataset.d));
+      set(i, list);
+    }));
+  });
 }
 function edChanged(quiet) { keepDrawing(); if (!quiet) edRefresh(); else edChecks(); }
 function edRefresh() {
   const c = drawing.cellar, grid = $('edGrid'); if (!grid) return;
-  const ch = KC.check(c), onRoute = {};
+  const ch = KC.check(c, { met: metTypes() }), onRoute = {};
   if (pen.routes) ch.routes.forEach(r => r.forEach((p, i) => { if (i) onRoute[p.lane * 100 + p.sq] = true; }));
   grid.style.gridTemplateColumns = 'repeat(' + c.rows[0].length + ', var(--ed-sq))';
   grid.innerHTML = c.rows.map((r, l) => [...r].map((t, q) => '<div class="ed-sq' + (t === ' ' ? ' out' : '') + (onRoute[l * 100 + q] ? ' route' : '') + '" role="gridcell" tabindex="0" data-l="' + l + '" data-q="' + q +
@@ -107,7 +166,7 @@ function edRefresh() {
   edChecks(ch);
 }
 function edChecks(ch) {
-  ch = ch || KC.check(drawing.cellar);
-  $('edChecks').innerHTML = (ch.ok ? '<p class="ed-ok">Ready to play. For now every cellar meets two waves from the Warren; the wave builder comes next.</p>' : '') +
+  ch = ch || KC.check(drawing.cellar, { met: metTypes() });
+  $('edChecks').innerHTML = (ch.ok ? '<p class="ed-ok">Ready to play.</p>' : '') +
     ch.problems.map(p => '<p class="ed-bad">' + esc(p) + '</p>').join('') + ch.notes.map(p => '<p class="ed-note">' + esc(p) + '</p>').join('');
 }

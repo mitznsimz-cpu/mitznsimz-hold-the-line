@@ -31,11 +31,41 @@ var HTL_CELLARS = (function (HTL) {
   const THEMES = [['damp', 'Damp stone'], ['sunken', 'Flooded'], ['sewer', 'Sewer'], ['crypt', 'Crypt'], ['ossuary', 'Ossuary'], ['tomb', 'Tomb'],
     ['dwarven', 'Dwarven halls'], ['mine', 'Mine'], ['fungal', 'Fungal caves'], ['lava', 'Forge and lava'], ['frost', 'Ice'], ['lodge', 'Old boards'],
     ['kitchen', 'Kitchen tiles'], ['yard', 'Yard cobbles'], ['garden', 'Garden flags']];
-  // until v1.10.1 brings the wave builder, every cellar is tried against the same two waves of the Warren's monsters
+  // a new cellar starts with two waves of the Warren's monsters, which everyone has met by the time the board opens
   const TRIAL_WAVES = [
     { name: 'Rats and Kobolds', by: 'Mitz', line: 'A first look at how your cellar holds.', spawns: 'direRat:0*2 kobold:3 direRat:5*2 kobold:7 goblin:9*2' },
     { name: 'Goblins', by: 'Simz', line: 'Now with archers and bats, to see where they get through.', spawns: 'goblin:0*2 goblinArcher:2 caveBat:4*2 goblin:6*2 goblinArcher:8 kobold:10*2 goblin:12*2' }
   ];
+  const MAX_ROUND = 20, MAX_COUNT = 6;
+
+  /* ---------- waves ---------- */
+  // a wave's spawn line as a list the board can show: [{ type, at, count, door }] (door null: any way in)
+  function entries(w) { try { return HTL.parseSpawns(w.spawns || '').map(e => ({ type: e.type, at: e.at, count: e.count, door: e.door })); } catch (e) { return []; } }
+  function spawnsOf(list) {
+    return list.slice().sort((a, b) => a.at - b.at).map(e => e.type + ':' + e.at + (e.count > 1 ? '*' + e.count : '') + (e.door != null ? '@' + e.door : '')).join(' ');
+  }
+  // how hard a monster is, roughly: what it can take, times what it deals in a turn
+  function strengthOf(type) {
+    const m = HTL.MONSTERS[type]; if (!m) return 0;
+    const a = m.attack, hit = (a.n * (a.d + 1) / 2 + a.mod) * ((m.traits.multi && m.traits.multi > 1 ? m.traits.multi : 1));
+    return m.hp * Math.max(1, hit);
+  }
+  const strengthOfWave = list => list.reduce((n, e) => n + strengthOf(e.type) * e.count, 0);
+  let PACK_WAVES = null; // every wave of the pack's own battles, with its strength, to compare with
+  function packWaves() {
+    if (!PACK_WAVES) { PACK_WAVES = [];
+      for (const b of HTL.BATTLES) b.waves.forEach((w, i) => PACK_WAVES.push({ battle: b.name, wave: w.name, i, gold: b.gold, s: strengthOfWave(w.parsed || entries(w)) })); }
+    return PACK_WAVES;
+  }
+  // a wave's threat in words: the pack's wave nearest in strength, and whether it is far beyond any wave the pack sends that early
+  function threat(c, i) {
+    const list = entries(c.waves[i] || {}), s = strengthOfWave(list); if (!s) return null;
+    const all = packWaves(); let near = all[0];
+    for (const w of all) if (Math.abs(Math.log(w.s) - Math.log(s)) < Math.abs(Math.log(near.s) - Math.log(s))) near = w;
+    const sameStage = all.filter(w => w.i === i), most = Math.max.apply(null, sameStage.length ? sameStage.map(w => w.s) : all.map(w => w.s));
+    const words = s > most * 1.5 ? 'Much harder than any wave ' + (i + 1) + ' in the game.' : s < Math.min.apply(null, all.map(w => w.s)) ? 'Gentler than anything in the game.' : '';
+    return { strength: Math.round(s), like: near, words };
+  }
 
   function blank() {
     return { v: VERSION, name: 'A cellar of my own', theme: 'damp', forks: false, gold: 150,
@@ -52,7 +82,7 @@ var HTL_CELLARS = (function (HTL) {
     const len = Math.min(LIMITS.len[1], Math.max(LIMITS.len[0], Math.max.apply(null, raw.rows.map(r => String(r).length))));
     c.rows = raw.rows.slice(0, LIMITS.rows[1]).map(r => String(r).slice(0, len).padEnd(len, ' ').replace(new RegExp('[^' + CHARS.replace(/[\]^\\-]/g, '\\$&') + ']', 'g'), '.'));
     while (c.rows.length < LIMITS.rows[0]) c.rows.push(' '.repeat(len));
-    if (Array.isArray(raw.waves) && raw.waves.length) c.waves = raw.waves.slice(0, LIMITS.waves).filter(w => w && typeof w.spawns === 'string')
+    if (Array.isArray(raw.waves) && raw.waves.length) c.waves = raw.waves.slice(0, LIMITS.waves).filter(w => w && typeof w.spawns === 'string' && entries(w).length)
       .map(w => ({ name: String(w.name || 'A wave').slice(0, LIMITS.name), by: w.by === 'Simz' ? 'Simz' : 'Mitz', line: String(w.line || '').slice(0, 140), spawns: w.spawns }));
     if (!c.waves.length) c.waves = TRIAL_WAVES.map(w => Object.assign({}, w));
     return c;
@@ -78,7 +108,7 @@ var HTL_CELLARS = (function (HTL) {
   /* ---------- the checks ---------- */
   const rowName = l => 'row ' + (l + 1), at = (l, q) => rowName(l) + ', square ' + (q + 1);
   // { ok, problems: [words], notes: [words], map: the floor as the rules see it (or null), routes: [[{lane, sq}...] per way in] }
-  function check(c) {
+  function check(c, opts) {
     const problems = [], notes = [], out = { ok: false, problems, notes, map: null, routes: [] };
     if (!c || !Array.isArray(c.rows)) { problems.push('There is no floor.'); return out; }
     const h = c.rows.length, len = c.rows[0].length;
@@ -110,6 +140,19 @@ var HTL_CELLARS = (function (HTL) {
       if (ways.some(w => w.ch === 'H')) notes.push('Hatches are floor until a monster bursts up through one.');
     }
     if (!(c.name || '').trim()) problems.push('Give the cellar a name.');
+    // the waves: monsters the player has met (opts.met, a list of types; all of them if not given), doors that exist
+    const met = opts && opts.met ? new Set(opts.met) : null;
+    if (!c.waves || !c.waves.length) problems.push('Add at least one wave of monsters.');
+    if (c.waves && c.waves.length > LIMITS.waves) problems.push('No more than ' + LIMITS.waves + ' waves.');
+    (c.waves || []).forEach((w, i) => {
+      const list = entries(w), n = list.reduce((k, e) => k + e.count, 0), name = 'Wave ' + (i + 1);
+      if (!list.length) { problems.push(name + ' has no monsters in it.'); return; }
+      if (n > LIMITS.perWave) problems.push(name + ' sends ' + n + ' monsters: ' + LIMITS.perWave + ' is the most.');
+      for (const e of list) {
+        if (met && !met.has(e.type)) problems.push(name + ': you haven’t met the ' + HTL.MONSTERS[e.type].name.replace(/^The /, '') + ' yet, so you can’t send one.');
+        if (e.door != null && e.door >= ways.length) problems.push(name + ' sends monsters through way in ' + (e.door + 1) + ', but there ' + (ways.length === 1 ? 'is only 1' : 'are only ' + ways.length) + '.');
+      }
+    });
     out.ok = !problems.length;
     return out;
   }
@@ -128,11 +171,11 @@ var HTL_CELLARS = (function (HTL) {
       waves: c.waves.map(w => ({ name: w.name, by: w.by, line: w.line, spawns: w.spawns })) };
   });
   // the battle id for a cellar that passes its checks, or null
-  function play(c) {
-    const ch = check(c); if (!ch.ok) return null;
+  function play(c, opts) {
+    const ch = check(c, opts); if (!ch.ok) return null;
     const key = fingerprint(c); READY[key] = JSON.parse(JSON.stringify(c));
     return 'cellar:' + key;
   }
-  return { VERSION, LIMITS, TILES, THEMES, TRIAL_WAVES, blank, clean, paint, resize, check, play, fingerprint };
+  return { VERSION, LIMITS, TILES, THEMES, TRIAL_WAVES, MAX_ROUND, MAX_COUNT, blank, clean, paint, resize, check, play, fingerprint, entries, spawnsOf, threat, strengthOf };
 })(HTL);
 if (typeof module !== 'undefined' && module.exports) module.exports = HTL_CELLARS;

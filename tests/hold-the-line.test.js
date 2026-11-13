@@ -1584,6 +1584,30 @@ test('cellars: resizing keeps the doors at the far end and stays within the limi
   assert.strictEqual(m.waves.length, 1);
   assert.strictEqual(JSON.stringify(K.clean(JSON.parse(JSON.stringify(K.blank())))), JSON.stringify(K.blank()), 'a cellar survives a trip through storage');
 });
+test('cellars: waves read and write as spawn lines, and only monsters you have met can be sent', () => {
+  const c = K.blank(), list = K.entries(c.waves[1]);
+  assert.strictEqual(K.spawnsOf(list), c.waves[1].spawns, 'a wave survives a trip through the builder');
+  assert.strictEqual(K.spawnsOf([{ type: 'orc', at: 4, count: 3, door: 1 }, { type: 'goblin', at: 0, count: 1, door: null }]), 'goblin:0 orc:4*3@1', 'in round order');
+  const met = ['direRat', 'kobold', 'goblin', 'goblinArcher', 'caveBat'];
+  assert.ok(K.check(c, { met }).ok);
+  c.waves.push({ name: 'Big', by: 'Mitz', line: '', spawns: 'ogre:0 goblin:2@7' });
+  const p = K.check(c, { met }).problems.join(' ');
+  assert.ok(/haven’t met the Ogre/.test(p) && /way in 8, but there are only 5/.test(p), p);
+  assert.strictEqual(K.play(c, { met }), null);
+  c.waves[2].spawns = ''; assert.ok(/Wave 3 has no monsters/.test(K.check(c).problems.join(' ')));
+  c.waves[2].spawns = 'goblin:0*6 goblin:1*6 goblin:2*6 goblin:3*6 goblin:4*6 goblin:5*6 goblin:6*6'; assert.ok(/sends 42 monsters/.test(K.check(c).problems.join(' ')));
+  c.waves[2].spawns = 'goblinChief:0 orc:2*4'; assert.ok(K.check(c).ok, 'without a met list, any monster');
+  const s = playCellar(K.play(c)); assert.ok(s.phase === 'won' || s.phase === 'lost');
+});
+test('cellars: each wave’s threat is read against the pack’s own waves', () => {
+  const c = K.blank(), easy = K.threat(c, 0);
+  assert.ok(easy && easy.like.battle && easy.like.wave && easy.strength > 0);
+  c.waves.push({ name: 'Wyrm', by: 'Mitz', line: '', spawns: 'redDragon:0*3 orc:0*6' });
+  const hard = K.threat(c, 2); assert.ok(hard.strength > easy.strength * 10);
+  c.waves.unshift({ name: 'Too soon', by: 'Mitz', line: '', spawns: 'redDragon:0*3' });
+  assert.ok(/Much harder than any wave 1/.test(K.threat(c, 0).words), K.threat(c, 0).words);
+  assert.strictEqual(K.threat(c, 9), null);
+});
 test('cellars: Mitz’s drawing board opens with the house, when the Red Wyrm’s Lair is won', () => {
   const CC = sandbox.HTL_CAMPAIGN, c = CC.fresh(), room = () => CC.rooms(c).find(r => r.id === 'board');
   assert.ok(room() && !room().open);
