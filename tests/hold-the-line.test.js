@@ -17,6 +17,7 @@ vm.runInContext(read('pack-core.js'), sandbox, { filename: 'pack-core.js' });
 vm.runInContext(read('sim.js'), sandbox, { filename: 'sim.js' });
 vm.runInContext(read('simz.js'), sandbox, { filename: 'simz.js' });
 vm.runInContext(read('modes.js'), sandbox, { filename: 'modes.js' });
+vm.runInContext(read('cellars.js'), sandbox, { filename: 'cellars.js' });
 vm.runInContext(read('campaign.js'), sandbox, { filename: 'campaign.js' });
 vm.runInContext(read('mitznsimz_minis.js'), sandbox, { filename: 'mitznsimz_minis.js' });
 const HTL = sandbox.HTL, Minis = sandbox.TableMinis;
@@ -1540,6 +1541,56 @@ test('every monster is written out with named fields, all of them present and th
   assert.ok(!/\bM\(|\bA\(/.test(read('pack-core.js').replace(/\/\*[\s\S]*?\*\//g, '')), 'no positional helpers left in the pack');
 });
 
+// ---------- cellars of your own (cellars.js) ----------
+const K = sandbox.HTL_CELLARS;
+const playCellar = (id, seed) => { const s = HTL.newGame(seed || 3, id); let last = -1, g = 0; while (s.phase === 'running' && g++ < 60000) { if (s.round !== last) { last = s.round; HTL.autoplay(s); } HTL.step(s, 0.1); s.events.length = 0; } return s; };
+test('cellars: a plain new cellar passes its checks, and Simz holds it', () => {
+  const c = K.blank(), ch = K.check(c);
+  assert.ok(ch.ok, ch.problems.join(' '));
+  assert.strictEqual(ch.routes.length, 5);
+  assert.ok(ch.routes.every(r => r.length === 10 && r[r.length - 1].sq === 0), 'each way in walks to the tavern');
+  const id = K.play(c), s = playCellar(id);
+  assert.ok(/^cellar:/.test(id) && HTL.battle(s).mode === 'cellar' && HTL.battle(s).theme === 'damp');
+  assert.strictEqual(s.phase, 'won');
+});
+test('cellars: the checks say in plain words what stops a cellar being played', () => {
+  const says = (c, re) => { const p = K.check(c).problems.join(' '); assert.ok(re.test(p), 'expected ' + re + ', got: ' + p); };
+  const none = K.blank(); none.rows = none.rows.map(r => r.replace('D', '.')); says(none, /no way in/);
+  const shut = K.blank(); K.paint(shut, 0, 8, '#'); K.paint(shut, 1, 9, '#'); K.paint(shut, 1, 8, '#'); says(shut, /door at row 1, square 10 has no way through/);
+  const bare = K.blank(); bare.rows = bare.rows.map(r => '#'.repeat(r.length - 1) + 'D'); says(bare, /left edge|somewhere to stand/);
+  const tiny = K.blank(); tiny.rows = tiny.rows.slice(0, 2); says(tiny, /3 to 9 rows/);
+  const odd = K.blank(); odd.rows[1] += '.'; says(odd, /same length/);
+  const anon = K.blank(); anon.name = '  '; says(anon, /name/);
+  assert.strictEqual(K.play(shut), null, 'a cellar with problems has no battle');
+  assert.ok(K.check(shut).routes[0].length === 0 && K.check(shut).routes[1].length > 0);
+});
+test('cellars: the same cellar is the same battle, played the same; a changed one is a new battle', () => {
+  const a = K.blank(), b = K.blank();
+  assert.strictEqual(K.play(a), K.play(b));
+  const one = playCellar(K.play(a), 9), two = playCellar(K.play(b), 9);
+  assert.strictEqual(one.round + ':' + one.gold + ':' + one.lives, two.round + ':' + two.gold + ':' + two.lives);
+  K.paint(b, 2, 4, '#'); assert.notStrictEqual(K.play(a), K.play(b));
+  assert.ok(HTL.battleById(K.play(b)) && HTL.MAPS['cellar-' + K.play(b).split(':')[1]].rows[2][4] === '#');
+});
+test('cellars: resizing keeps the doors at the far end and stays within the limits; clean() mends what it is given', () => {
+  const c = K.blank();
+  K.resize(c, 1, 1); assert.strictEqual(c.rows.length, 6); assert.ok(c.rows.every(r => r.length === 11 && r[10] === 'D'), 'one step at a time, doors at the far end');
+  for (let i = 0; i < 20; i++) K.resize(c, 1, 1); assert.strictEqual(c.rows.length, K.LIMITS.rows[1]); assert.strictEqual(c.rows[0].length, K.LIMITS.len[1]);
+  for (let i = 0; i < 20; i++) K.resize(c, -1, -1); assert.strictEqual(c.rows.length, K.LIMITS.rows[0]); assert.strictEqual(c.rows[0].length, K.LIMITS.len[0]);
+  assert.strictEqual(K.clean(null), null); assert.strictEqual(K.clean({ rows: [] }), null);
+  const m = K.clean({ name: 'x'.repeat(99), theme: 'nowhere', gold: 99999, rows: ['..Z.D', '...'], waves: [{ spawns: 'goblin:0' }, 7] });
+  assert.ok(m.name.length === K.LIMITS.name && m.theme === 'damp' && m.gold === K.LIMITS.gold[1]);
+  assert.ok(m.rows.length >= K.LIMITS.rows[0] && m.rows.every(r => r.length === m.rows[0].length && !/Z/.test(r)));
+  assert.strictEqual(m.waves.length, 1);
+  assert.strictEqual(JSON.stringify(K.clean(JSON.parse(JSON.stringify(K.blank())))), JSON.stringify(K.blank()), 'a cellar survives a trip through storage');
+});
+test('cellars: Mitz’s drawing board opens with the house, when the Red Wyrm’s Lair is won', () => {
+  const CC = sandbox.HTL_CAMPAIGN, c = CC.fresh(), room = () => CC.rooms(c).find(r => r.id === 'board');
+  assert.ok(room() && !room().open);
+  for (const id of CC.CELLAR) c.wins[id] = { medium: 1 };
+  assert.ok(room().open);
+});
+
 // ---------- motes ----------
 test('every battle has a theme the page has motes for, and every theme names a kind of mote', () => {
   const M = vm.runInContext(read('view/motes.js') + '\n;({ MOTE_THEMES, MOTE_KINDS })', vm.createContext({}));
@@ -1669,7 +1720,7 @@ test('every monster card says what each of its traits does', () => {
 
 // ---------- coverage: every mini fights somewhere ----------
 test('the page loads the shared minis, then the pack, then the rules, then the game', () => {
-  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'simz.js', 'modes.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/motes.js', 'view/floors.js', 'view/plaques.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
+  const page = read('index.html'), order = ['mitznsimz_minis.js', 'motion.js', 'sound.js', 'pack-core.js', 'sim.js', 'simz.js', 'modes.js', 'cellars.js', 'campaign.js', 'view/core.js', 'view/board.js', 'view/events.js', 'view/draw.js', 'view/motes.js', 'view/floors.js', 'view/plaques.js', 'view/drawingboard.js', 'view/hud.js', 'view/tavern.js', 'view/app.js'].map(f => page.indexOf('<script src="' + f + '"></script>'));
   assert.ok(order.every(i => i > 0), 'a script tag is missing: ' + order);
   assert.ok(order.every((i, k) => !k || i > order[k - 1]), 'scripts load out of order');
   assert.ok(!/MINI CORE START/.test(page), 'the page should load mitznsimz_minis.js, not carry a copy');

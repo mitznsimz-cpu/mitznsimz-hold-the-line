@@ -90,8 +90,9 @@ var HTL_SIMZ = (function (HTL) {
   const ROLE_OF = { bard: 'income', fighter: 'wall', ranger: 'shooter', wizard: 'caster', cleric: 'healer', rogue: 'flank' };
   const ROLES = { income: ['bard'], wall: ['fighter', 'monk', 'paladin'], shooter: ['ranger', 'warlock', 'tinker', 'sorcerer'],
     caster: ['wizard', 'druid', 'sorcerer'], healer: ['cleric', 'paladin', 'druid'], flank: ['rogue', 'monk', 'tinker'] };
+  const planned = m => { if (!m.plan) m.plan = derivePlan(m); return m; }; // a floor drawn since he loaded (the cellar editor) gets its plan when first played
   function planTypes(s, sub) {
-    const map = mapOf(s), key = map.id + '|' + (s.loadout || []).join(',');
+    const map = planned(mapOf(s)), key = map.id + '|' + (s.loadout || []).join(',');
     if (s.simzPlan && s.simzPlan.key === key) return s.simzPlan.types;
     const inParty = ty => !s.loadout || s.loadout.indexOf(ty) >= 0, used = {};
     const types = map.plan.map(([planned]) => {
