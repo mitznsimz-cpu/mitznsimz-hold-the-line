@@ -140,6 +140,22 @@ button:focus-visible{outline:2px solid var(--gold-hi);outline-offset:2px}
 .ed-checks.shake{animation:edshake .35s}
 @keyframes edshake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
 .cellar-list .btnrow{margin-top:6px}
+.ed-waves{display:grid;gap:10px;margin:8px 0}
+.ed-wave{padding:10px 12px;border-radius:8px;background:var(--table-2);box-shadow:inset 0 0 0 1px var(--line);display:grid;gap:8px}
+.ed-whead{display:flex;align-items:center;gap:6px}
+.ed-whead b{flex:1;font:600 16px/1 var(--ui);color:var(--gold-hi)}
+.ed-whead .secondary,.ed-spawn .secondary,.ed-wave .btnrow .secondary{min-height:32px;padding:0 10px;font-size:13px}
+.ed-field{display:grid;gap:3px}
+.ed-field input,.ed-spawn select{font:500 15px/1.2 var(--ui);color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+.ed-spawns{display:grid;gap:6px}
+.ed-spawn{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 0;border-top:1px solid rgba(75,57,43,.6)}
+.ed-spawn select[data-f="type"]{flex:1 1 140px}
+.ed-spawn select[data-f="door"]{font-size:14px;padding:6px 4px}
+.ed-mini .lbl{font-size:10px;letter-spacing:.1em}
+.ed-mini{display:flex;align-items:center;gap:4px}
+.ed-mini b{min-width:1.6em;text-align:center;font:600 15px/1 var(--ui);font-variant-numeric:tabular-nums}
+.ed-x{margin-left:auto}
+.ed-threat{margin:0;font:500 14px/1.35 var(--ui);color:var(--ink-dim)}
 .cats{display:flex;gap:6px;align-items:center}
 .deadly-note{display:none}
 .party.fixed{grid-template-columns:repeat(3,minmax(0,1fr))}

@@ -60,6 +60,7 @@ async function open({ w = 1280, h = 800, dpr = 1, ua = CHROME, settings = { soun
     await page.evaluate(() => {
       const C = window.HTL_CAMPAIGN, c = C.fresh();
       for (const id of C.CELLAR.concat(C.HOUSE)) { c.wins[id] = { medium: 1 }; c.totals.battles++; c.totals.wins++; }
+      for (const b of HTL.BATTLES) for (const t of b.monsters) c.seen.monsters[t] = { slain: 1 }; // and so met every monster in them
       c.takings = c.earned = 2000;
       C.save(localStorage, c);
     });
@@ -224,11 +225,21 @@ test('Mitz’s drawing board: draw a cellar, see where the monsters walk, play i
   await page.click('.ed-tile[data-ch="."]');
   for (const l of [0, 1, 2, 3, 4]) await page.click('.ed-sq[data-l="' + l + '"][data-q="8"]');
   await page.fill('#edName', 'Test Cellar');
+  // a third wave: only monsters met in the campaign are offered
+  await page.click('#btnAddWave');
+  const offered = await page.$$eval('.ed-wave[data-w="2"] select[data-f="type"] option', os => os.map(o => o.value));
+  const met = await page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem(HTL_CAMPAIGN.KEY)).seen.monsters));
+  assert(offered.length && offered.every(t => met.indexOf(t) >= 0), 'only met monsters: ' + offered.join(','));
+  await page.fill('[data-wname="2"]', 'The Third');
+  await page.click('.ed-wave[data-w="2"] [data-f="count"][data-d="1"]');
+  assert((await page.evaluate(() => drawing.cellar.waves[2].spawns)).endsWith(':0*3'), 'three of them');
+  assert(/About as tough as/.test(await page.textContent('.ed-wave[data-w="2"]')), 'its threat is read');
   await page.click('#btnPlayCellar'); await page.click('#btnGo');
   await page.waitForFunction(() => HTL_VIEW.info().started);
   const id = (await info(page)).battle; assert(/^cellar:/.test(id), id);
   await page.click('#btnAuto'); await page.evaluate(() => HTL_VIEW.speed(8));
-  await page.waitForFunction(() => HTL_VIEW.info().phase !== 'running', null, { timeout: 240000 });
+  assert((await page.textContent('#waveLbl').catch(() => '')) !== null);
+  await page.waitForFunction(() => HTL_VIEW.info().phase !== 'running', null, { timeout: 300000 });
   await page.waitForSelector('#btnGames');
   assert(/drawing board/i.test(await page.textContent('#btnGames')));
   assert((await page.evaluate(() => localStorage.getItem(HTL_CAMPAIGN.KEY))) === before, 'the campaign is untouched');
