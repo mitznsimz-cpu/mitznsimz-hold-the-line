@@ -1608,6 +1608,38 @@ test('cellars: each wave’s threat is read against the pack’s own waves', () 
   assert.ok(/Much harder than any wave 1/.test(K.threat(c, 0).words), K.threat(c, 0).words);
   assert.strictEqual(K.threat(c, 9), null);
 });
+test('cellars: Simz’s trial games, the Medium seal that lets a cellar be shared, and renaming keeps it', () => {
+  const c = K.blank();
+  const r = K.trialGame(c, 'medium', 101); assert.ok(r && typeof r.won === 'boolean' && typeof r.leaks === 'object');
+  assert.strictEqual(JSON.stringify(K.trialGame(c, 'medium', 101)), JSON.stringify(r), 'a trial game plays the same every time');
+  assert.ok(!K.canShare(c));
+  K.markBeaten(c, 'simz'); assert.ok(K.canShare(c) && c.beaten.by === 'simz');
+  c.name = 'Renamed'; assert.ok(K.canShare(c), 'a new name keeps the seal');
+  K.paint(c, 2, 3, '#'); assert.ok(!K.canShare(c), 'a changed floor must be beaten again');
+  K.markBeaten(c, 'you'); K.markDeadly(c, { simz: 0 }); K.markDeadly(c, { you: true });
+  assert.ok(c.deadly.you && c.deadly.simz === 0);
+  const back = K.clean(JSON.parse(JSON.stringify(c))); assert.ok(K.canShare(back) && back.deadly.you, 'the seals survive storage');
+});
+test('cellars: a shared cellar travels as a file, and anything else is turned away in plain words', () => {
+  const c = K.blank(); c.name = 'Gift'; K.markBeaten(c, 'you'); K.markDeadly(c, { you: true });
+  const got = K.importText(K.exportText(c));
+  assert.ok(!got.error, got.error); assert.strictEqual(got.cellar.name, 'Gift'); assert.ok(!got.cellar.deadly, 'the Deadly record stays home');
+  for (const [bad, re] of [['', /couldn’t be read/], ['{"game":"other"}', /isn’t from Hold the Line/], [JSON.stringify({ game: 'mitznsimz-hold-the-line', v: 1, campaign: {} }), /campaign, not a cellar/],
+    [JSON.stringify({ game: 'mitznsimz-hold-the-line', kind: 'cellar', v: 99, cellar: c }), /newer version/]])
+    assert.ok(re.test(K.importText(bad).error || ''), bad.slice(0, 40) + ': ' + K.importText(bad).error);
+  const broken = JSON.parse(K.exportText(c)); broken.cellar.rows = broken.cellar.rows.map(r => r.replace('D', '#'));
+  assert.ok(/can’t be played: There’s no way in/.test(K.importText(JSON.stringify(broken)).error));
+  const strange = JSON.parse(K.exportText(c)); strange.cellar.waves = [{ name: 'X', spawns: 'redDragon:0' }];
+  assert.ok(!K.importText(JSON.stringify(strange)).error, 'a friend’s cellar may hold monsters you haven’t met');
+});
+test('cellars: the editor’s trophies are awarded once, by the drawing board only, and are worth no gold', () => {
+  const CC = sandbox.HTL_CAMPAIGN, c = CC.fresh(), ids = ['firstPlans', 'proof', 'petard', 'simzApproves', 'simzStumped', 'guestCellar', 'masterBuilder'];
+  for (const id of ids) { const t = CC.TROPHIES.find(x => x.id === id); assert.ok(t && t.cellar && t.reward === 0, id); }
+  assert.ok(CC.cellarTrophy(c, 'firstPlans', '2026-11-13')); assert.strictEqual(CC.cellarTrophy(c, 'firstPlans', '2026-11-14'), null);
+  assert.strictEqual(c.trophies.firstPlans, '2026-11-13'); assert.strictEqual(CC.cellarTrophy(c, 'open', 'x'), null, 'not the campaign’s trophies');
+  CC.record(c, { battle: 'warren', won: true, difficulty: 'medium', livesLost: 0, feats: {} }, '2026-11-13');
+  for (const id of ids.slice(1)) assert.ok(!c.trophies[id], id + ' is never won by a battle of the campaign');
+});
 test('cellars: Mitz’s drawing board opens with the house, when the Red Wyrm’s Lair is won', () => {
   const CC = sandbox.HTL_CAMPAIGN, c = CC.fresh(), room = () => CC.rooms(c).find(r => r.id === 'board');
   assert.ok(room() && !room().open);

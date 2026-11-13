@@ -85,6 +85,9 @@ var HTL_CELLARS = (function (HTL) {
     if (Array.isArray(raw.waves) && raw.waves.length) c.waves = raw.waves.slice(0, LIMITS.waves).filter(w => w && typeof w.spawns === 'string' && entries(w).length)
       .map(w => ({ name: String(w.name || 'A wave').slice(0, LIMITS.name), by: w.by === 'Simz' ? 'Simz' : 'Mitz', line: String(w.line || '').slice(0, 140), spawns: w.spawns }));
     if (!c.waves.length) c.waves = TRIAL_WAVES.map(w => Object.assign({}, w));
+    // the seals it has earned, each for the cellar as it was: beaten on Medium (needed to share it), and the Deadly record
+    if (raw.beaten && typeof raw.beaten.fp === 'string') c.beaten = { fp: raw.beaten.fp.slice(0, 16), by: raw.beaten.by === 'simz' ? 'simz' : 'you' };
+    if (raw.deadly && typeof raw.deadly.fp === 'string') c.deadly = { fp: raw.deadly.fp.slice(0, 16), you: !!raw.deadly.you, simz: raw.deadly.simz == null ? null : Math.max(0, Math.floor(+raw.deadly.simz) || 0) };
     return c;
   }
 
@@ -163,6 +166,16 @@ var HTL_CELLARS = (function (HTL) {
     let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
     return (h >>> 0).toString(36);
   }
+  // the cellar as it plays, without its name or seals: what a seal is for, so renaming a cellar keeps them
+  function layoutKey(c) { return fingerprint({ name: '', theme: c.theme, forks: c.forks, gold: c.gold, rows: c.rows, waves: c.waves.map(w => ({ name: '', spawns: w.spawns })) }); }
+  const sealed = (c, seal) => !!(seal && seal.fp === layoutKey(c));
+  function markBeaten(c, by) { if (!sealed(c, c.beaten)) c.beaten = { fp: layoutKey(c), by }; }
+  function markDeadly(c, what) { // what: { you: true } or { simz: wins }
+    if (!sealed(c, c.deadly)) c.deadly = { fp: layoutKey(c), you: false, simz: null };
+    if (what.you) c.deadly.you = true;
+    if (what.simz != null) c.deadly.simz = what.simz;
+  }
+  const canShare = c => sealed(c, c.beaten);
   const READY = {}; // key → the cellar, for the battle maker
   HTL.addMaker('cellar', key => {
     const c = READY[key]; if (!c) return null;
@@ -176,6 +189,38 @@ var HTL_CELLARS = (function (HTL) {
     const key = fingerprint(c); READY[key] = JSON.parse(JSON.stringify(c));
     return 'cellar:' + key;
   }
-  return { VERSION, LIMITS, TILES, THEMES, TRIAL_WAVES, MAX_ROUND, MAX_COUNT, blank, clean, paint, resize, check, play, fingerprint, entries, spawnsOf, threat, strengthOf };
+  /* Simz tries a cellar: one game, his suggested party, on a difficulty. { won, leaks: { row: n } } where monsters got
+     through. Kept to one game a call so the page can run them between frames. */
+  function trialGame(c, difficulty, seed) {
+    const id = play(c); if (!id) return null;
+    const s = HTL.newGame(seed, id, { difficulty, loadout: HTL.suggestLoadout(id).pick }), leaks = {};
+    let last = -1, guard = 0;
+    while (s.phase === 'running' && guard++ < 80000) {
+      if (s.round !== last) { last = s.round; HTL.autoplay(s); }
+      HTL.step(s, 0.1);
+      for (const e of s.events.splice(0)) if (e.type === 'leak') leaks[e.lane] = (leaks[e.lane] || 0) + 1;
+    }
+    return { won: s.phase === 'won', leaks };
+  }
+  const TRIAL_DIFFS = ['easy', 'medium', 'hard', 'deadly'], TRIAL_SEEDS = [101, 202, 303, 404, 505];
+
+  /* ---------- sharing: a cellar as a small file ---------- */
+  const FILE_TAG = 'mitznsimz-hold-the-line';
+  function exportText(c) {
+    const out = clean(c); delete out.deadly;
+    return JSON.stringify({ game: FILE_TAG, kind: 'cellar', v: VERSION, cellar: out }, null, 1);
+  }
+  // { cellar } or { error } in words for the player; a shared cellar must play, but its monsters needn't be ones you've met
+  function importText(text) {
+    let o; try { o = JSON.parse(String(text)); } catch (e) { return { error: 'That file couldn’t be read as a cellar.' }; }
+    if (!o || typeof o !== 'object' || o.game !== FILE_TAG) return { error: 'That file isn’t from Hold the Line.' };
+    if (o.kind !== 'cellar') return { error: o.campaign ? 'That’s a campaign, not a cellar. Import it under Settings in the tavern.' : 'That file has no cellar in it.' };
+    if ((+o.v || 0) > VERSION) return { error: 'That cellar was drawn in a newer version of the game. Reload the page to get the latest, then try again.' };
+    const c = clean(o.cellar); if (!c) return { error: 'That file has no cellar in it.' };
+    const ch = check(c); if (!ch.ok) return { error: 'That cellar can’t be played: ' + ch.problems[0] };
+    return { cellar: c };
+  }
+  return { VERSION, LIMITS, TILES, THEMES, TRIAL_WAVES, MAX_ROUND, MAX_COUNT, TRIAL_DIFFS, TRIAL_SEEDS, blank, clean, paint, resize, check, play, fingerprint, layoutKey,
+    entries, spawnsOf, threat, strengthOf, trialGame, markBeaten, markDeadly, sealed, canShare, exportText, importText };
 })(HTL);
 if (typeof module !== 'undefined' && module.exports) module.exports = HTL_CELLARS;

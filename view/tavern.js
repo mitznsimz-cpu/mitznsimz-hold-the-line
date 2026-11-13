@@ -374,7 +374,7 @@ function trackFeats(ev) {
 }
 function finishBattle(won) {
   if (V.recorded) return; V.recorded = true;
-  if (HTL.battle(S).mode === 'cellar') { V.result = null; return; } // a cellar of your own counts for nothing in the campaign
+  if (HTL.battle(S).mode === 'cellar') { V.result = null; cellarFinished(won); return; } // a cellar of your own counts for nothing in the campaign, but its own trophies
   const F = V.feats || freshFeats();
   const b = HTL.battle(S), md = b.mode && MODES ? { mode: b.mode, waves: MODES.held(S), date: b.date, score: MODES.dailyScore(S), puzzle: b.index, lives: S.lives, theme: b.theme } : {};
   if (b.reverse) { F.slain = {}; F.placed = {}; } // in Reverse the heroes were Simz's, and the slain were yours
@@ -411,11 +411,12 @@ function loadDiff() { try { const v = localStorage.getItem(DIFF_KEY); return HTL
 function saveDiff(v) { try { localStorage.setItem(DIFF_KEY, v); } catch (e) { /* not remembered: fine */ } }
 function showParty(battleId, from) {
   const o = $('overlay'), b = HTL.battleById(battleId), roster = CAMP.roster(camp), sug = HTL.suggestLoadout(battleId, roster);
-  let pick = sug.pick.slice(), diff = b.mode ? 'medium' : loadDiff(); // the modes are played on Medium
+  const choose = !b.mode || b.mode === 'cellar'; // the modes are played on Medium; the campaign and cellars of your own at any difficulty
+  let pick = sug.pick.slice(), diff = choose ? loadDiff() : 'medium';
   o.innerHTML = '<div class="panel wide" role="dialog" aria-labelledby="ovTitle">' +
     '<span class="eyebrow">' + b.name + (b.map !== 'classic' ? ' · ' + HTL.MAPS[b.map].name : '') + '</span><h2 id="ovTitle">The common room</h2>' +
     '<p class="lede">Pick up to ' + sug.size + ' of the regulars to go down the cellar steps. Mitz and Simz have a few ideas.</p>' + tavernLine() +
-    (b.mode ? '<p class="persona"><span>' + b.by + ':</span> ' + b.line + '</p><p class="diff-line" id="diffLine"></p>' :
+    (!choose ? '<p class="persona"><span>' + b.by + ':</span> ' + b.line + '</p><p class="diff-line" id="diffLine"></p>' :
     '<h3 class="pick">How hard</h3><div class="diff" role="group" aria-label="Difficulty">' +
     Object.keys(HTL.DIFFICULTY).map(k => '<button type="button" data-d="' + k + '">' + HTL.DIFFICULTY[k].name + '</button>').join('') + '</div>' +
     '<p class="diff-line" id="diffLine"></p>') +
@@ -429,7 +430,7 @@ function showParty(battleId, from) {
   o.hidden = false;
   const sync = () => {
     o.querySelectorAll('.diff button').forEach(x => x.setAttribute('aria-pressed', x.dataset.d === diff ? 'true' : 'false'));
-    $('diffLine').textContent = b.mode ? 'Played on Medium, with the tavern’s help.' : HTL.DIFFICULTY[diff].line;
+    $('diffLine').textContent = !choose ? 'Played on Medium, with the tavern’s help.' : HTL.DIFFICULTY[diff].line + (b.mode === 'cellar' ? (diff === 'medium' ? ' Win on Medium and you can share it.' : diff === 'deadly' ? ' Win on Deadly where Simz can’t, for a trophy.' : '') : '');
     if ($('tavernLine')) $('tavernLine').classList.toggle('deadly', diff === 'deadly');
     o.querySelectorAll('.regular').forEach(x => x.setAttribute('aria-pressed', pick.indexOf(x.dataset.t) >= 0 ? 'true' : 'false'));
     o.querySelectorAll('.look').forEach(x => { const t = x.dataset.look, her = LOOKS[t] === 'f', n = PACK.heroes[t].name;
@@ -451,7 +452,7 @@ function showParty(battleId, from) {
     miniInto(x.parentNode.querySelector('canvas'), t, 40); sync();
   }));
   $('btnCats').addEventListener('click', () => { pick = sug.pick.slice(); sync(); });
-  $('btnBack').addEventListener('click', () => (b.mode === 'cellar' ? showEditor('tavern') : b.mode ? showGames(from) : b.stage === 2 ? showHouse(from) : showCellar(from)));
+  $('btnBack').addEventListener('click', () => (b.mode === 'cellar' ? cellarBack() : b.mode ? showGames(from) : b.stage === 2 ? showHouse(from) : showCellar(from)));
   let warned = false; // without a Bard nothing earns gold: say so once, then go if they still want to
   $('btnGo').addEventListener('click', () => {
     if (pick.indexOf('bard') < 0 && roster.indexOf('bard') >= 0 && !warned) { warned = true; hint('No Bard in the party: nothing will earn gold but the bounties. Press again to go anyway.', 5000); return; }
@@ -649,7 +650,7 @@ function showEnd(won) {
   o.querySelectorAll('.gains canvas.plaque').forEach(c => drawPlaque(c, c.dataset.p, true, 34));
   if ($('btnNext')) $('btnNext').addEventListener('click', () => (nextPuzzle ? showPuzzle(nextPuzzle, 'end') : showParty(next.id, 'end')));
   if ($('btnAgain')) $('btnAgain').addEventListener('click', () => newGame(mode === 'endless' ? MODES.endlessId(newSeed()) : b.id, true, Object.assign({}, lastOpts, CAMP.battleOptions(camp))));
-  if ($('btnGames')) $('btnGames').addEventListener('click', () => (mode === 'cellar' ? showEditor('end') : showGames('end')));
+  if ($('btnGames')) $('btnGames').addEventListener('click', () => (mode === 'cellar' ? cellarBack() : showGames('end')));
   $('btnChoose').addEventListener('click', () => showTavern('end'));
   (($('btnNext') || $('btnAgain') || $('btnChoose'))).focus();
 }

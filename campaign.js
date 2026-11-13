@@ -97,7 +97,15 @@ var HTL_CAMPAIGN = (function (HTL) {
     { id: 'dryland', name: 'High and dry', text: 'Beat the Thing in the Well out of the water.', reward: 120, test: s => s.feats.dry },
     { id: 'mown', name: 'Mown down', text: 'Beat the Thing Under the Lawn before it can dive.', reward: 120, test: s => s.feats.mown },
     { id: 'strike', name: 'Strike!', text: 'Bowl over three monsters with one barrel.', reward: 80, test: s => s.feats.strike },
-    { id: 'puzzles', name: 'Brains as well as brawn', text: 'Solve every puzzle.', reward: 150, test: (s, c) => PUZZLE_COUNT > 0 && Object.keys(c.modes.puzzles).length >= PUZZLE_COUNT }
+    { id: 'puzzles', name: 'Brains as well as brawn', text: 'Solve every puzzle.', reward: 150, test: (s, c) => PUZZLE_COUNT > 0 && Object.keys(c.modes.puzzles).length >= PUZZLE_COUNT },
+    // the cellar editor's own, awarded by the drawing board (cellarTrophy below), never by a battle of the campaign, and worth no gold
+    { id: 'firstPlans', name: 'First plans', text: 'Draw a cellar of your own.', reward: 0, cellar: true, test: () => false },
+    { id: 'proof', name: 'Proof of the pudding', text: 'Beat a cellar of your own drawing.', reward: 0, cellar: true, test: () => false },
+    { id: 'petard', name: 'Hoist by your own petard', text: 'Lose to a cellar of your own drawing.', reward: 0, cellar: true, test: () => false },
+    { id: 'simzApproves', name: 'Simz approves', text: 'Simz beats a cellar of yours on Deadly.', reward: 0, cellar: true, test: () => false },
+    { id: 'simzStumped', name: 'Simz is stumped', text: 'Beat a cellar of yours on Deadly that Simz can’t.', reward: 0, cellar: true, test: () => false },
+    { id: 'guestCellar', name: 'A guest cellar', text: 'Beat a cellar someone else drew.', reward: 0, cellar: true, test: () => false },
+    { id: 'masterBuilder', name: 'Master builder', text: 'Draw ten cellars.', reward: 0, cellar: true, test: () => false }
   ];
 
   /* ---------- the save ---------- */
@@ -221,6 +229,13 @@ var HTL_CAMPAIGN = (function (HTL) {
     for (const id of IDS) if (won(c, id) && JOINS[id]) JOINS[id].forEach(t => { if (out.indexOf(t) < 0) out.push(t); });
     return HTL.HERO_TYPES.filter(t => out.indexOf(t) >= 0);
   }
+  // an editor trophy, if it isn't on the wall yet: the trophy, or null
+  function cellarTrophy(c, id, today) {
+    const t = TROPHIES.find(x => x.id === id && x.cellar);
+    if (!t || c.trophies[id]) return null;
+    c.trophies[id] = String(today || '').slice(0, 10) || 'yes';
+    return t;
+  }
   function rooms(c) { const n = winsCount(c); return ROOMS.map(r => Object.assign({ open: n >= r.wins && (!r.needs || won(c, r.needs)) }, r)); }
   function nextUpgrade(c, key) {
     const u = UPGRADES[key], lvl = c.upgrades[key] || 0;
@@ -340,7 +355,7 @@ var HTL_CAMPAIGN = (function (HTL) {
     return res;
   }
 
-  return { VERSION, KEY, DIFFS, CELLAR, HOUSE, HOUSE_OPENS, START, JOINS, ROOMS, UPGRADES, TROPHIES, DROPS, MODE_PAY, BELT_MAX, recordMode, buyThrow, setLook, fresh, clean, migrate, upgrade, STEPS, load, save, exportText, importText, summary,
+  return { VERSION, KEY, DIFFS, CELLAR, HOUSE, HOUSE_OPENS, START, JOINS, ROOMS, UPGRADES, TROPHIES, DROPS, MODE_PAY, BELT_MAX, recordMode, cellarTrophy, buyThrow, setLook, fresh, clean, migrate, upgrade, STEPS, load, save, exportText, importText, summary,
     won, winsCount, stars, starsFor, unlocked, roster, rooms, nextUpgrade, buy, equip, duty, battleOptions, pay, record };
 })(HTL);
 if (typeof module !== 'undefined' && module.exports) module.exports = HTL_CAMPAIGN;

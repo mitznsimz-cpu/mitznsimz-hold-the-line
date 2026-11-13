@@ -242,11 +242,43 @@ test('Mitz’s drawing board: draw a cellar, see where the monsters walk, play i
   await page.waitForFunction(() => HTL_VIEW.info().phase !== 'running', null, { timeout: 300000 });
   await page.waitForSelector('#btnGames');
   assert(/drawing board/i.test(await page.textContent('#btnGames')));
-  assert((await page.evaluate(() => localStorage.getItem(HTL_CAMPAIGN.KEY))) === before, 'the campaign is untouched');
+  const after = await page.evaluate(() => localStorage.getItem(HTL_CAMPAIGN.KEY)), was = JSON.parse(before), now = JSON.parse(after);
+  const canon = v => JSON.stringify(v, (k, x) => x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort()) : x);
+  const strip = c => { const t = Object.assign({}, c); delete t.trophies; return canon(t); }; // the same contents, in whatever order
+  if (strip(now) !== strip(was)) { const d = []; for (const k of Object.keys(now)) if (canon(now[k]) !== canon(was[k]) && k !== 'trophies') d.push(k + ': ' + JSON.stringify(was[k]).slice(0, 120) + ' → ' + JSON.stringify(now[k]).slice(0, 120)); assert(false, 'the campaign is untouched, but: ' + d.join('; ')); }
+  const editor = ['firstPlans', 'proof', 'petard', 'masterBuilder'];
+  assert(Object.keys(now.trophies).filter(k => !was.trophies[k]).every(k => editor.indexOf(k) >= 0), 'only the editor’s own trophies: ' + Object.keys(now.trophies));
   await page.click('#btnGames');
   assert((await page.inputValue('#edName')) === 'Test Cellar', 'back at the drawing');
   await page.click('#btnMine');
   assert(/Test Cellar/.test(await page.textContent('.cellar-list')), 'kept in My cellars');
+  assert(!page.errors.length, page.errors.join('\n'));
+  await page.ctx.close();
+});
+test('a cellar is shared only once beaten on Medium: Simz’s trial seals it, it exports, and a friend imports and plays it', async () => {
+  const page = await open({ campaign: true });
+  await page.click('.room[data-room="board"]'); await page.click('#btnNewCellar'); await page.fill('#edName', 'Shared Cellar');
+  assert(await page.evaluate(() => !!camp.trophies.firstPlans), 'First plans for drawing one');
+  await page.click('#btnExportCellar', { force: true });
+  assert(/Beat it on Medium/.test(await page.textContent('#edShare')), 'not shareable yet');
+  await page.click('#btnTrial');
+  await page.waitForFunction(() => /of 5/.test(document.getElementById('edTrial').textContent) && !document.getElementById('btnTrial').disabled, null, { timeout: 180000 });
+  assert(/Beaten on Medium by Simz/.test(await page.textContent('#edShare')), 'Simz sealed it');
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#btnExportCellar')]);
+  assert(/^cellar-shared-cellar\.json$/.test(dl.suggestedFilename()), dl.suggestedFilename());
+  await page.click('#btnMine');
+  await page.setInputFiles('#impCellar', await dl.path());
+  await page.waitForFunction(() => /is in/.test(document.getElementById('impMsg').textContent));
+  assert(/From a friend/.test(await page.textContent('.cellar-list')), 'listed as a friend’s');
+  await page.setInputFiles('#impCellar', { name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('{"game":"mitznsimz-hold-the-line","v":1,"campaign":{}}') });
+  await page.waitForFunction(() => /campaign, not a cellar/.test(document.getElementById('impMsg').textContent));
+  await page.click('.cellar-list [data-open^="f"]'); await page.click('#btnGo');
+  await page.waitForFunction(() => HTL_VIEW.info().started);
+  await page.click('#btnAuto'); await page.evaluate(() => HTL_VIEW.speed(8));
+  await page.waitForFunction(() => HTL_VIEW.info().phase !== 'running', null, { timeout: 240000 });
+  await page.waitForSelector('#btnGames');
+  if ((await info(page)).phase === 'won') assert(await page.evaluate(() => !!camp.trophies.guestCellar), 'A guest cellar');
+  await page.click('#btnGames'); assert(await page.$('#btnImportCellar'), 'back at the list');
   assert(!page.errors.length, page.errors.join('\n'));
   await page.ctx.close();
 });
